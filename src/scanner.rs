@@ -109,8 +109,20 @@ impl Scanner {
             '\n' => {
                 self.line += 1;
             }
+            // String literals.
+            '"' => {
+                self.string();
+            }
             // Unexpected character.
             _ => {
+                if Scanner::is_digit(c) {
+                    self.number();
+                    return;
+                }
+                if Scanner::is_alpha(c) {
+                    self.identifier();
+                    return;
+                }
                 self.error = Some(Error {
                     line: self.line,
                     column: self.current - 1,
@@ -150,6 +162,13 @@ impl Scanner {
         self.source.chars().nth(self.current).unwrap()
     }
 
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            return '\0';
+        }
+        self.source.chars().nth(self.current + 1).unwrap()
+    }
+
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
         self.tokens
@@ -161,6 +180,76 @@ impl Scanner {
         self.tokens
             .push(Token::new(token_type, text.to_string(), self.line, literal));
     }
+
+    fn string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+        if self.is_at_end() {
+            self.error = Some(Error {
+                line: self.line,
+                column: self.current,
+                message: "Unterminated string.".to_string(),
+            });
+            Prompt::error(
+                self.line,
+                &self.source,
+                self.current,
+                "Unterminated string.",
+            );
+            return;
+        }
+        self.advance();
+
+        let value = self.source[self.start + 1..self.current - 1].to_string();
+        self.add_token_with_literal(TokenType::String, Some(value));
+    }
+
+    fn is_digit(c: char) -> bool {
+        c.is_digit(10)
+    }
+
+    fn number(&mut self) {
+        while Scanner::is_digit(self.peek()) {
+            self.advance();
+        }
+
+        if self.peek() == '.' && Scanner::is_digit(self.peek_next()) {
+            self.advance();
+
+            while Scanner::is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        let value = self.source[self.start..self.current].to_string();
+        self.add_token_with_literal(TokenType::Number, Some(value));
+    }
+
+    fn is_alpha(c: char) -> bool {
+        c.is_alphabetic() || c == '_'
+    }
+
+    fn is_alpha_numeric(c: char) -> bool {
+        Scanner::is_alpha(c) || Scanner::is_digit(c)
+    }
+
+    fn identifier(&mut self) {
+        while Scanner::is_alpha_numeric(self.peek()) {
+            self.advance();
+        }
+
+        let text = &self.source[self.start..self.current];
+        let keywords_map = token::get_keywords_map();
+        let token_type = match keywords_map.get(text) {
+            Some(t) => t.clone(),
+            None => TokenType::Identifier,
+        };
+        self.add_token(token_type);
+    }
 }
 
 #[cfg(test)]
@@ -169,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_scanner() {
-        let source = String::from("var a = 10;");
+        let source = String::from("var a = \"test\";\nvar b = 123.45;");
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens();
         for token in tokens {

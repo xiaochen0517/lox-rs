@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
@@ -32,6 +35,19 @@ pub enum TokenType {
     And,
     Class,
     Else,
+    False,
+    For,
+    Fun,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
 
     // EOF
     Eof,
@@ -63,4 +79,28 @@ impl Token {
     pub fn to_string(&self) -> String {
         format!("{:?} {} {:?}", self.token_type, self.lexeme, self.literal)
     }
+}
+
+static KEYWORDS_MAP: OnceLock<HashMap<&'static str, TokenType>> = OnceLock::new();
+pub fn get_keywords_map() -> &'static HashMap<&'static str, TokenType> {
+    KEYWORDS_MAP.get_or_init(|| {
+        let mut m = HashMap::new();
+        m.insert("and", TokenType::And);
+        m.insert("class", TokenType::Class);
+        m.insert("else", TokenType::Else);
+        m.insert("false", TokenType::False);
+        m.insert("for", TokenType::For);
+        m.insert("fun", TokenType::Fun);
+        m.insert("if", TokenType::If);
+        m.insert("nil", TokenType::Nil);
+        m.insert("or", TokenType::Or);
+        m.insert("print", TokenType::Print);
+        m.insert("return", TokenType::Return);
+        m.insert("super", TokenType::Super);
+        m.insert("this", TokenType::This);
+        m.insert("true", TokenType::True);
+        m.insert("var", TokenType::Var);
+        m.insert("while", TokenType::While);
+        m
+    })
 }
