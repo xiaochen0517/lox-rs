@@ -2,92 +2,105 @@ use std::fmt::Debug;
 
 use crate::scanner::token::Token;
 
-pub trait Expr {
-    fn accept<R, V: ExprVisitor<R>>(&self, visitor: &V) -> R;
-}
-
 macro_rules! expr_impl {
     (
         $(
-            $struct_name:ident<$($generic_param:ident$(: $generic_bound:path)?),* $(,)?>($visitor_fn:ident) {
+            $struct_name:ident($visitor_fn:ident) {
                 $($field_name:ident : $field_type:ty),* $(,)?
             }
         ),* $(,)?
     ) => {
 
-        pub trait ExprVisitor<ER> {
+        pub enum ExprType {
             $(
-                fn $visitor_fn<$($generic_param$(: $generic_bound)?),*>(&self, expr: &$struct_name<$($generic_param),*>) -> ER;
+                $struct_name,
             )*
+        }
+
+        pub trait ExprVisitor {
+            $(
+                fn $visitor_fn(&mut self, expr: &$struct_name);
+            )*
+        }
+
+        pub trait Expr:Debug {
+            fn accept(&self, visitor: &mut dyn ExprVisitor);
+            fn get_type(&self) -> ExprType;
         }
 
         $(
 
             #[derive(Debug)]
-            pub struct $struct_name<$($generic_param$(: $generic_bound)?),*> {
+            pub struct $struct_name {
                 $(pub $field_name: $field_type),*
             }
 
-            impl<$($generic_param$(: $generic_bound)?),*> Expr for $struct_name<$($generic_param),*> {
-                fn accept<ER, V: ExprVisitor<ER>>(&self, visitor: &V) -> ER {
+            impl Expr for $struct_name {
+
+                fn accept(&self, visitor: &mut dyn ExprVisitor) {
                     visitor.$visitor_fn(self)
+                }
+
+                fn get_type(&self) -> ExprType {
+                    ExprType::$struct_name
                 }
             }
 
-            impl<$($generic_param$(: $generic_bound)?),*> $struct_name<$($generic_param),*> {
+            impl $struct_name {
                 pub fn new($($field_name : $field_type),*) -> Self {
                     $struct_name { $($field_name),* }
                 }
             }
-
         )*
     };
 }
 
 expr_impl! {
-    Binary<L: Expr, R: Expr>(binary_visite) {
-        left: Box<L>,
+    Binary(binary_visite) {
+        left: Box<dyn Expr>,
         operator: Token,
-        right: Box<R>,
+        right: Box<dyn Expr>,
     },
-    Grouping<T: Expr>(grouping_visite) {
-        expression: Box<T>,
+    Grouping(grouping_visite) {
+        expression: Box<dyn Expr>,
     },
-    Literal<T: Debug>(literal_visite) {
-        value: Option<T>,
+    Literal(literal_visite) {
+        value: Option<String>,
     },
-    Unary<T: Expr>(unary_visite) {
+    Unary(unary_visite) {
         operator: Token,
-        right: Box<T>,
+        right: Box<dyn Expr>,
     },
 }
 
-struct PrintExprVisitor;
+pub struct PrintExprVisitor;
 
-impl ExprVisitor<String> for PrintExprVisitor {
-
-    fn binary_visite<L: Expr, R: Expr>(&self, expr: &Binary<L, R>) -> String {
-        format!(
-            "({} {} {})",
-            expr.operator.lexeme,
-            expr.left.accept(self),
-            expr.right.accept(self)
-        )
+impl ExprVisitor for PrintExprVisitor {
+    fn binary_visite(&mut self, expr: &Binary) {
+        print!("([binary] ");
+        expr.left.accept(self);
+        print!(" {} ", expr.operator.lexeme);
+        expr.right.accept(self);
+        print!(")");
     }
 
-    fn grouping_visite<T:Expr>(&self,expr: &Grouping<T>) -> String {
-        format!("(group {})", expr.expression.accept(self))
+    fn grouping_visite(&mut self, expr: &Grouping) {
+        print!("([group] ");
+        expr.expression.accept(self);
+        print!(")");
     }
 
-    fn literal_visite<T:Debug>(&self,expr: &Literal<T>) -> String {
+    fn literal_visite(&mut self, expr: &Literal) {
         match &expr.value {
-            Some(v) => format!("{:?}", v),
-            None => "nil".to_string(),
+            Some(v) => print!("({:?})", v),
+            None => print!("(nil)"),
         }
     }
 
-    fn unary_visite<T:Expr>(&self,expr: &Unary<T>) -> String {
-        format!("({} {})", expr.operator.lexeme, expr.right.accept(self))
+    fn unary_visite(&mut self, expr: &Unary) {
+        print!("([unary] {} ", expr.operator.lexeme);
+        expr.right.accept(self);
+        print!(")");
     }
 }
 
@@ -107,9 +120,17 @@ mod tests {
         let binary_expr = Binary::new(left, operator, right);
         println!("{:?}", binary_expr);
 
-        let printer = PrintExprVisitor;
-        let result = binary_expr.accept(&printer);
-        println!("Result: {}", result);
-        assert_eq!(result, "(+ \"1\" \"2\")");
+        let mut printer = PrintExprVisitor;
+        binary_expr.accept(&mut printer);
+        println!();
+
+        assert_eq!(
+            format!("{:?}", binary_expr.left),
+            "Literal { value: Some(\"1\") }"
+        );
+        assert_eq!(
+            format!("{:?}", binary_expr.right),
+            "Literal { value: Some(\"2\") }"
+        );
     }
 }

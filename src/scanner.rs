@@ -32,14 +32,14 @@ impl Scanner {
         self.line
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
         self.tokens
             .push(Token::new(TokenType::Eof, "".to_string(), self.line, None));
-        &self.tokens
+        self.tokens.clone()
     }
 
     fn is_at_end(&self) -> bool {
@@ -128,7 +128,7 @@ impl Scanner {
                     column: self.current - 1,
                     message: format!("Unexpected character: {}", c),
                 });
-                Prompt::error(
+                Prompt::error_by_line(
                     self.line,
                     &self.source,
                     self.current - 1,
@@ -194,7 +194,7 @@ impl Scanner {
                 column: self.current,
                 message: "Unterminated string.".to_string(),
             });
-            Prompt::error(
+            Prompt::error_by_line(
                 self.line,
                 &self.source,
                 self.current,

@@ -1,4 +1,7 @@
+use crate::parser::Parser;
+
 mod expression;
+mod parser;
 mod prompt;
 mod scanner;
 
@@ -9,9 +12,12 @@ impl Lox {
     fn run(content: String) {
         let mut scanner = scanner::Scanner::new(content);
         let tokens = scanner.scan_tokens();
-        for token in tokens {
+        for token in tokens.iter() {
             println!("{:?}", token);
         }
+        let mut parser = Parser::new(tokens);
+        let expression = parser.parse();
+        println!("{:#?}", expression);
     }
 
     fn error(line: usize, message: &str) {
