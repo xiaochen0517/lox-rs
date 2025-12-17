@@ -54,11 +54,34 @@ pub enum TokenType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum LoxType {
+    Str(Box<String>),
+    Num(Box<f64>),
+    Bool(Box<bool>),
+}
+
+impl LoxType {
+    pub fn new_str(s: &str) -> Self {
+        LoxType::Str(Box::new(s.to_string()))
+    }
+
+    pub fn new_num(n: f64) -> Self {
+        LoxType::Num(Box::new(n))
+    }
+
+    pub fn new_bool(b: bool) -> Self {
+        LoxType::Bool(Box::new(b))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
     pub line: usize,
-    pub literal: Option<String>,
+    pub col_start: usize,
+    pub col_end: usize,
+    pub literal: Option<LoxType>,
 }
 
 impl Token {
@@ -66,12 +89,16 @@ impl Token {
         token_type: TokenType,
         lexeme: String,
         line: usize,
-        literal: Option<String>,
+        col_start: usize,
+        col_end: usize,
+        literal: Option<LoxType>,
     ) -> Self {
         Token {
             token_type,
             lexeme,
             line,
+            col_start,
+            col_end,
             literal,
         }
     }

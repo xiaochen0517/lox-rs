@@ -5,7 +5,7 @@ use crate::prompt::Prompt;
 use error::Error;
 
 // 重导出
-pub use token::{Token, TokenType};
+pub use token::{LoxType, Token, TokenType};
 
 pub struct Scanner {
     source: String,
@@ -13,6 +13,7 @@ pub struct Scanner {
     start: usize,
     current: usize,
     line: usize,
+    column: usize,
     error: Option<Error>,
 }
 
@@ -24,6 +25,7 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
+            column: 0,
             error: None,
         }
     }
@@ -37,8 +39,14 @@ impl Scanner {
             self.start = self.current;
             self.scan_token();
         }
-        self.tokens
-            .push(Token::new(TokenType::Eof, "".to_string(), self.line, None));
+        self.tokens.push(Token::new(
+            TokenType::Eof,
+            "".to_string(),
+            self.line,
+            self.column,
+            self.column + 1,
+            None,
+        ));
         self.tokens.clone()
     }
 
@@ -108,6 +116,7 @@ impl Scanner {
             ' ' | '\r' | '\t' => { /* Ignore whitespace. */ }
             '\n' => {
                 self.line += 1;
+                self.column = 0;
             }
             // String literals.
             '"' => {
@@ -141,6 +150,7 @@ impl Scanner {
     fn advance(&mut self) -> char {
         let c = self.source.chars().nth(self.current).unwrap();
         self.current += 1;
+        self.column += 1;
         c
     }
 
@@ -152,6 +162,7 @@ impl Scanner {
             return false;
         }
         self.current += 1;
+        self.column += 1;
         true
     }
 
@@ -171,20 +182,33 @@ impl Scanner {
 
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
-        self.tokens
-            .push(Token::new(token_type, text.to_string(), self.line, None));
+        self.tokens.push(Token::new(
+            token_type,
+            text.to_string(),
+            self.line,
+            self.column,
+            self.column + text.len(),
+            None,
+        ));
     }
 
-    fn add_token_with_literal(&mut self, token_type: TokenType, literal: Option<String>) {
+    fn add_token_with_literal(&mut self, token_type: TokenType, literal: Option<LoxType>) {
         let text = &self.source[self.start..self.current];
-        self.tokens
-            .push(Token::new(token_type, text.to_string(), self.line, literal));
+        self.tokens.push(Token::new(
+            token_type,
+            text.to_string(),
+            self.line,
+            self.column,
+            self.column + text.len(),
+            literal,
+        ));
     }
 
     fn string(&mut self) {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
+                self.column = 0;
             }
             self.advance();
         }
@@ -205,7 +229,7 @@ impl Scanner {
         self.advance();
 
         let value = self.source[self.start + 1..self.current - 1].to_string();
-        self.add_token_with_literal(TokenType::String, Some(value));
+        self.add_token_with_literal(TokenType::String, Some(LoxType::new_str(value.as_str())));
     }
 
     fn is_digit(c: char) -> bool {
@@ -226,7 +250,8 @@ impl Scanner {
         }
 
         let value = self.source[self.start..self.current].to_string();
-        self.add_token_with_literal(TokenType::Number, Some(value));
+        let float_value: f64 = value.parse().unwrap();
+        self.add_token_with_literal(TokenType::Number, Some(LoxType::new_num(float_value)));
     }
 
     fn is_alpha(c: char) -> bool {

@@ -1,9 +1,11 @@
 use std::string;
 use std::{any::TypeId, char::ToUppercase, fmt::Debug};
 
-use crate::expression::{Binary, Expr, Grouping, Literal, PrintExprVisitor, Unary};
+use crate::ast::{
+    Binary, Expr, Expression, Grouping, Literal, Print, PrintExprVisitor, Stmt, Unary,
+};
 use crate::prompt::Prompt;
-use crate::scanner::{Token, TokenType};
+use crate::scanner::{LoxType, Token, TokenType};
 
 pub struct ParseError;
 
@@ -35,12 +37,35 @@ impl Parser {
         return Parser { tokens, current: 0 };
     }
 
-    pub fn parse(&mut self) -> Box<dyn Expr> {
-        return self.expression();
+    pub fn parse(&mut self) -> Vec<Box<dyn Stmt>> {
+        let mut statements = Vec::new();
+        while !self.is_at_end() {
+            statements.push(self.statement());
+        }
+        return statements;
     }
 
     fn expression(&mut self) -> Box<dyn Expr> {
         return self.equality();
+    }
+
+    fn statement(&mut self) -> Box<dyn Stmt> {
+        if self.match_types(vec![TokenType::Print]) {
+            return self.print_statement();
+        }
+        return self.expression_statement();
+    }
+
+    fn print_statement(&mut self) -> Box<dyn Stmt> {
+        let value = self.expression();
+        self.consume(TokenType::Semicolon, "Expect ';' after value.");
+        return Box::new(Print::new(value));
+    }
+
+    fn expression_statement(&mut self) -> Box<dyn Stmt> {
+        let expr = self.expression();
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.");
+        return Box::new(Expression::new(expr));
     }
 
     fn equality(&mut self) -> Box<dyn Expr> {
@@ -106,9 +131,9 @@ impl Parser {
 
     fn primary(&mut self) -> Box<dyn Expr> {
         if self.match_types(vec![TokenType::False]) {
-            return Box::new(Literal::new(Some("false".to_string())));
+            return Box::new(Literal::new(Some(LoxType::new_bool(false))));
         } else if self.match_types(vec![TokenType::True]) {
-            return Box::new(Literal::new(Some("true".to_string())));
+            return Box::new(Literal::new(Some(LoxType::new_bool(true))));
         } else if self.match_types(vec![TokenType::Nil]) {
             return Box::new(Literal::new(None));
         } else if self.match_types(vec![TokenType::Number, TokenType::String]) {
@@ -197,21 +222,51 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
+    use crate::scanner::LoxType;
+
     use super::*;
 
     #[test]
     fn test_parser() {
         let tokens = vec![
-            Token::new(TokenType::Number, "1".to_string(), 1, Some("1".to_string())),
-            Token::new(TokenType::Plus, "+".to_string(), 1, None),
-            Token::new(TokenType::Number, "2".to_string(), 1, Some("2".to_string())),
-            Token::new(TokenType::Star, "*".to_string(), 1, None),
-            Token::new(TokenType::LeftParen, "(".to_string(), 1, None),
-            Token::new(TokenType::Number, "3".to_string(), 1, Some("3".to_string())),
-            Token::new(TokenType::Minus, "-".to_string(), 1, None),
-            Token::new(TokenType::Number, "4".to_string(), 1, Some("4".to_string())),
-            Token::new(TokenType::RightParen, ")".to_string(), 1, None),
-            Token::new(TokenType::Eof, "".to_string(), 1, None),
+            Token::new(
+                TokenType::Number,
+                "1".to_string(),
+                1,
+                1,
+                1,
+                Some(LoxType::new_str("1")),
+            ),
+            Token::new(TokenType::Plus, "+".to_string(), 1, 2, 2, None),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                1,
+                3,
+                3,
+                Some(LoxType::new_str("2")),
+            ),
+            Token::new(TokenType::Star, "*".to_string(), 1, 4, 4, None),
+            Token::new(TokenType::LeftParen, "(".to_string(), 1, 5, 5, None),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                1,
+                6,
+                6,
+                Some(LoxType::new_str("3")),
+            ),
+            Token::new(TokenType::Minus, "-".to_string(), 1, 7, 7, None),
+            Token::new(
+                TokenType::Number,
+                "4".to_string(),
+                1,
+                8,
+                8,
+                Some(LoxType::new_str("4")),
+            ),
+            Token::new(TokenType::RightParen, ")".to_string(), 1, 9, 9, None),
+            Token::new(TokenType::Eof, "".to_string(), 1, 10, 10, None),
         ];
         let mut parser = Parser::new(tokens);
         let expr = parser.expression();
