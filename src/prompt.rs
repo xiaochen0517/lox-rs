@@ -12,7 +12,7 @@ impl Prompt {
         eprintln!("{}Error: {}", pointer_spacing, message);
     }
 
-    pub fn error(token: Token, message: &str) {
+    pub fn error(token: &Token, message: &str) {
         if token.token_type == crate::scanner::TokenType::Eof {
             Prompt::error_by_line(
                 token.line,

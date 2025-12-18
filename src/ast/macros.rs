@@ -16,6 +16,7 @@ macro_rules! generate_ast {
         paste! {
             $(
 
+                #[derive(Debug, Clone)]
                 pub enum [<$ast_name Type>] {
                     $(
                         $struct_name,
@@ -24,12 +25,12 @@ macro_rules! generate_ast {
 
                 pub trait [<$ast_name Visitor>] {
                     $(
-                        fn $visitor_fn(&self, [<$ast_name:lower>]: &$struct_name) -> Option<LoxType>;
+                        fn $visitor_fn(&mut self, [<$ast_name:lower>]: &$struct_name) -> Option<LoxType>;
                     )*
                 }
 
                 pub trait $ast_name:Debug {
-                    fn accept(&self, visitor: &dyn [<$ast_name Visitor>]) -> Option<LoxType>;
+                    fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Option<LoxType>;
                     fn get_type(&self) -> [<$ast_name Type>];
                 }
 
@@ -42,7 +43,7 @@ macro_rules! generate_ast {
 
                     impl $ast_name for $struct_name {
 
-                        fn accept(&self, visitor: &dyn [<$ast_name Visitor>]) -> Option<LoxType> {
+                        fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Option<LoxType> {
                             visitor.$visitor_fn(self)
                         }
 

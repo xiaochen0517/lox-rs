@@ -25,6 +25,9 @@ generate_ast! {
             operator: Token,
             right: Box<dyn Expr>,
         },
+        Variable(variable_visit) {
+            name: Token,
+        }
     },
     Stmt {
         Print(print_visit) {
@@ -33,13 +36,17 @@ generate_ast! {
         Expression(expression_visit) {
             expression: Box<dyn Expr>,
         },
+        Var(var_visit) {
+            name: Token,
+            initializer: Box<dyn Expr>
+        }
     },
 }
 
 pub struct PrintExprVisitor;
 
 impl ExprVisitor for PrintExprVisitor {
-    fn binary_visit(&self, expr: &Binary) -> Option<LoxType> {
+    fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
         print!("([binary] ");
         expr.left.accept(self);
         print!(" {} ", expr.operator.lexeme);
@@ -48,22 +55,26 @@ impl ExprVisitor for PrintExprVisitor {
         return None;
     }
 
-    fn grouping_visit(&self, expr: &Grouping) -> Option<LoxType> {
+    fn grouping_visit(&mut self, expr: &Grouping) -> Option<LoxType> {
         print!("([group] ");
         expr.expression.accept(self);
         print!(")");
         return None;
     }
 
-    fn literal_visit(&self, expr: &Literal) -> Option<LoxType> {
+    fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
         return None;
     }
 
-    fn unary_visit(&self, expr: &Unary) -> Option<LoxType> {
+    fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
         print!("([unary] {} ", expr.operator.lexeme);
         expr.right.accept(self);
         print!(")");
         return None;
+    }
+
+    fn variable_visit(&mut self, expr: &Variable) -> Option<LoxType> {
+        todo!()
     }
 }
 
@@ -92,11 +103,11 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", binary_expr.left),
-            "Literal { value: Some(\"1\") }"
+            "Literal { value: Some(Str(\"1\")) }"
         );
         assert_eq!(
             format!("{:?}", binary_expr.right),
-            "Literal { value: Some(\"2\") }"
+            "Literal { value: Some(Str(\"2\")) }"
         );
     }
 }

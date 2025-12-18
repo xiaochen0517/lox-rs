@@ -1,30 +1,12 @@
-use std::string;
-use std::{any::TypeId, char::ToUppercase, fmt::Debug};
+use std::fmt::Debug;
+mod error;
 
 use crate::ast::{
-    Binary, Expr, Expression, Grouping, Literal, Print, PrintExprVisitor, Stmt, Unary,
+    Binary, Expr, Expression, Grouping, Literal, Print, PrintExprVisitor, Stmt, Unary, Var,
+    Variable,
 };
-use crate::prompt::Prompt;
+use crate::parser::error::{ParseError, create_parse_error};
 use crate::scanner::{LoxType, Token, TokenType};
-
-pub struct ParseError;
-
-impl Debug for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ParseError")
-    }
-}
-
-impl ParseError {
-    pub fn new() -> Self {
-        return ParseError;
-    }
-
-    pub fn error(token: Token, message: &str) -> Self {
-        Prompt::error(token, message);
-        return ParseError::new();
-    }
-}
 
 #[derive(Debug)]
 pub struct Parser {
@@ -34,53 +16,79 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        return Parser { tokens, current: 0 };
+        Parser { tokens, current: 0 }
     }
 
     pub fn parse(&mut self) -> Vec<Box<dyn Stmt>> {
         let mut statements = Vec::new();
         while !self.is_at_end() {
-            statements.push(self.statement());
+            statements.push(self.declaration());
         }
-        return statements;
+        statements
     }
 
-    fn expression(&mut self) -> Box<dyn Expr> {
-        return self.equality();
+    fn declaration(&mut self) -> Box<dyn Stmt> {
+        let result = if self.match_types(vec![TokenType::Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+        result.unwrap_or_else(|err| {
+            self.synchronize();
+            Box::new(Expression::new(Box::new(Literal::new(None))))
+        })
     }
 
-    fn statement(&mut self) -> Box<dyn Stmt> {
+    fn var_declaration(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        let name = self.consume(TokenType::Identifier, "Expect variable name")?;
+
+        let mut initializer: Box<dyn Expr> = Box::new(Literal::new(None));
+        if self.match_types(vec![TokenType::Equal]) {
+            initializer = self.expression()?;
+        }
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration",
+        )?;
+        Ok(Box::new(Var::new(name, initializer)))
+    }
+
+    fn expression(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        self.equality()
+    }
+
+    fn statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         if self.match_types(vec![TokenType::Print]) {
             return self.print_statement();
         }
         return self.expression_statement();
     }
 
-    fn print_statement(&mut self) -> Box<dyn Stmt> {
-        let value = self.expression();
-        self.consume(TokenType::Semicolon, "Expect ';' after value.");
-        return Box::new(Print::new(value));
+    fn print_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        return Ok(Box::new(Print::new(value)));
     }
 
-    fn expression_statement(&mut self) -> Box<dyn Stmt> {
-        let expr = self.expression();
-        self.consume(TokenType::Semicolon, "Expect ';' after expression.");
-        return Box::new(Expression::new(expr));
+    fn expression_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+        return Ok(Box::new(Expression::new(expr)));
     }
 
-    fn equality(&mut self) -> Box<dyn Expr> {
-        let mut expr = self.comparison();
+    fn equality(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.comparison()?;
 
         while self.match_types(vec![TokenType::BangEqual, TokenType::EqualEqual]) {
             let operator = self.previous();
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = Box::new(Binary::new(expr, operator, right));
         }
-        return expr;
+        Ok(expr)
     }
 
-    fn comparison(&mut self) -> Box<dyn Expr> {
-        let mut expr = self.term();
+    fn comparison(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.term()?;
 
         while self.match_types(vec![
             TokenType::Greater,
@@ -89,61 +97,66 @@ impl Parser {
             TokenType::LessEqual,
         ]) {
             let operator = self.previous();
-            let right = self.term();
+            let right = self.term()?;
             expr = Box::new(Binary::new(expr, operator, right));
         }
 
-        return expr;
+        Ok(expr)
     }
 
-    fn term(&mut self) -> Box<dyn Expr> {
-        let mut expr = self.factor();
+    fn term(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.factor()?;
 
         while self.match_types(vec![TokenType::Minus, TokenType::Plus]) {
             let operator = self.previous();
-            let right = self.factor();
+            let right = self.factor()?;
             expr = Box::new(Binary::new(expr, operator, right));
         }
 
-        return expr;
+        Ok(expr)
     }
 
-    fn factor(&mut self) -> Box<dyn Expr> {
-        let mut expr = self.unary();
+    fn factor(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.unary()?;
 
         while self.match_types(vec![TokenType::Slash, TokenType::Star]) {
             let operator = self.previous();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = Box::new(Binary::new(expr, operator, right));
         }
 
-        return expr;
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Box<dyn Expr> {
+    fn unary(&mut self) -> Result<Box<dyn Expr>, ParseError> {
         if self.match_types(vec![TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous();
-            let right = self.unary();
-            return Box::new(Unary::new(operator, right));
+            let right = self.unary()?;
+            return Ok(Box::new(Unary::new(operator, right)));
         }
         return self.primary();
     }
 
-    fn primary(&mut self) -> Box<dyn Expr> {
+    fn primary(&mut self) -> Result<Box<dyn Expr>, ParseError> {
         if self.match_types(vec![TokenType::False]) {
-            return Box::new(Literal::new(Some(LoxType::new_bool(false))));
+            return Ok(Box::new(Literal::new(Some(LoxType::new_bool(false)))));
         } else if self.match_types(vec![TokenType::True]) {
-            return Box::new(Literal::new(Some(LoxType::new_bool(true))));
+            return Ok(Box::new(Literal::new(Some(LoxType::new_bool(true)))));
         } else if self.match_types(vec![TokenType::Nil]) {
-            return Box::new(Literal::new(None));
+            return Ok(Box::new(Literal::new(None)));
         } else if self.match_types(vec![TokenType::Number, TokenType::String]) {
-            return Box::new(Literal::new(Some(self.previous().literal.clone().unwrap())));
+            return Ok(Box::new(Literal::new(Some(
+                self.previous().literal.clone().unwrap(),
+            ))));
+        } else if self.match_types(vec![TokenType::Identifier]) {
+            return Ok(Box::new(Variable::new(self.previous())));
         } else if self.match_types(vec![TokenType::LeftParen]) {
-            let expr = self.expression();
-            self.consume(TokenType::RightParen, "Expect ')' after expression.");
-            return Box::new(Grouping::new(expr));
+            let expr = self.expression()?;
+            self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
+            return Ok(Box::new(Grouping::new(expr)));
         }
-        panic!("无法解析 primary 表达式")
+        let err_message = "Expect expression.";
+        return Err(create_parse_error(self.peek(), err_message));
     }
 
     fn synchronize(&mut self) {
@@ -181,11 +194,12 @@ impl Parser {
         return false;
     }
 
-    fn consume(&mut self, token_type: TokenType, message: &str) -> Token {
+    fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, ParseError> {
         if self.check(token_type) {
-            return self.advance();
+            return Ok(self.advance());
         }
-        panic!("Parser consume error: {}", message);
+        let err_message = format!("Parser consume error: {}", message);
+        return Err(create_parse_error(self.peek(), err_message.as_str()));
     }
 
     fn check(&self, token_type: TokenType) -> bool {
@@ -269,7 +283,7 @@ mod test {
             Token::new(TokenType::Eof, "".to_string(), 1, 10, 10, None),
         ];
         let mut parser = Parser::new(tokens);
-        let expr = parser.expression();
+        let mut expr = parser.expression().unwrap();
         println!("{:?}", expr);
 
         let mut printer = PrintExprVisitor;

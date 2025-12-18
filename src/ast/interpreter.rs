@@ -1,3 +1,5 @@
+use crate::ast::{Var, Variable};
+use crate::environment::Environment;
 use crate::{
     ast::{
         Binary, Expr, ExprVisitor, Expression, Grouping, Literal, Print, Stmt, StmtVisitor, Unary,
@@ -5,26 +7,31 @@ use crate::{
     scanner::{LoxType, Token, TokenType},
 };
 use std::any::Any;
+use unescape::unescape;
 
-#[derive(Debug, Clone)]
-pub struct Interpreter {}
+#[derive(Debug)]
+pub struct Interpreter {
+    environment: Environment,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {}
+        Interpreter {
+            environment: Environment::new(),
+        }
     }
 
-    pub fn interpret(&self, statements: &Vec<Box<dyn Stmt>>) {
+    pub fn interpret(&mut self, statements: &Vec<Box<dyn Stmt>>) {
         for statement in statements {
             self.execute(statement);
         }
     }
 
-    fn execute(&self, stmt: &Box<dyn Stmt>) {
+    fn execute(&mut self, stmt: &Box<dyn Stmt>) {
         stmt.accept(self);
     }
 
-    fn evaluate(&self, expr: &dyn Expr) -> Option<LoxType> {
+    fn evaluate(&mut self, expr: &dyn Expr) -> Option<LoxType> {
         expr.accept(self)
     }
 
@@ -63,7 +70,7 @@ impl Interpreter {
 }
 
 impl ExprVisitor for Interpreter {
-    fn binary_visit(&self, expr: &Binary) -> Option<LoxType> {
+    fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
         println!("Visiting Binary Expression: {:?}", expr);
         let left = self.evaluate(expr.left.as_ref());
         let right = self.evaluate(expr.right.as_ref());
@@ -86,8 +93,21 @@ impl ExprVisitor for Interpreter {
                     (LoxType::Num(left_num), LoxType::Num(right_str)) => {
                         return Some(LoxType::Num(Box::new(*left_num + *right_str)));
                     }
+                    // 一侧为字符串，另一侧为数字时，进行字符串拼接
+                    (LoxType::Str(left_str), LoxType::Num(right_num)) => {
+                        return Some(LoxType::Str(Box::new(format!(
+                            "{}{}",
+                            *left_str, *right_num
+                        ))));
+                    }
+                    (LoxType::Num(left_num), LoxType::Str(right_str)) => {
+                        return Some(LoxType::Str(Box::new(format!(
+                            "{}{}",
+                            *left_num, *right_str
+                        ))));
+                    }
                     _ => {
-                        panic!("Operands must be two numbers or two strings.");
+                        panic!("Operands must be numbers or strings.");
                     }
                 }
             }
@@ -184,17 +204,17 @@ impl ExprVisitor for Interpreter {
         }
     }
 
-    fn grouping_visit(&self, expr: &Grouping) -> Option<LoxType> {
+    fn grouping_visit(&mut self, expr: &Grouping) -> Option<LoxType> {
         println!("Visiting Grouping Expression: {:?}", expr);
         expr.expression.accept(self)
     }
 
-    fn literal_visit(&self, expr: &Literal) -> Option<LoxType> {
+    fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
         println!("Visiting Literal Expression: {:?}", expr);
         expr.value.clone()
     }
 
-    fn unary_visit(&self, expr: &Unary) -> Option<LoxType> {
+    fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
         println!("Visiting Unary Expression: {:?}", expr);
         let right = self.evaluate(expr.right.as_ref());
 
@@ -211,16 +231,21 @@ impl ExprVisitor for Interpreter {
             }
         }
     }
+
+    fn variable_visit(&mut self, expr: &Variable) -> Option<LoxType> {
+        self.environment.get(expr.name.lexeme.as_str()).clone()
+    }
 }
 
 impl StmtVisitor for Interpreter {
-    fn print_visit(&self, stmt: &Print) -> Option<LoxType> {
+    fn print_visit(&mut self, stmt: &Print) -> Option<LoxType> {
         let value = self.evaluate(stmt.expression.as_ref());
         match value {
             Some(v) => match v {
-                LoxType::Str(s) => {
-                    print!("{}", *s);
-                }
+                LoxType::Str(s) => match unescape(&*s.as_str()) {
+                    Some(unescaped_str) => print!("{}", unescaped_str),
+                    None => print!("{}", *s),
+                },
                 LoxType::Num(n) => {
                     print!("{}", *n);
                 }
@@ -235,8 +260,14 @@ impl StmtVisitor for Interpreter {
         return None;
     }
 
-    fn expression_visit(&self, stmt: &Expression) -> Option<LoxType> {
+    fn expression_visit(&mut self, stmt: &Expression) -> Option<LoxType> {
         self.evaluate(stmt.expression.as_ref());
+        return None;
+    }
+
+    fn var_visit(&mut self, stmt: &Var) -> Option<LoxType> {
+        let value = self.evaluate(stmt.initializer.as_ref());
+        self.environment.define(stmt.name.lexeme.clone(), value);
         return None;
     }
 }

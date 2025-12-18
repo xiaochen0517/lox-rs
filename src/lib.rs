@@ -5,6 +5,7 @@ mod ast;
 mod parser;
 mod prompt;
 mod scanner;
+mod environment;
 
 #[derive(Debug)]
 pub struct Lox {
@@ -18,7 +19,7 @@ impl Lox {
         }
     }
 
-    fn run(&self, content: String) {
+    fn run(&mut self, content: String) {
         let mut scanner = scanner::Scanner::new(content);
         let tokens = scanner.scan_tokens();
         for token in tokens.iter() {
@@ -33,12 +34,12 @@ impl Lox {
         eprintln!("[line {}] Error: {}", line, message);
     }
 
-    pub fn run_file(&self, path: &str) {
+    pub fn run_file(&mut self, path: &str) {
         let file_content_string = std::fs::read_to_string(path).expect("Reader File Error");
         self.run(file_content_string);
     }
 
-    pub fn run_prompt(&self) {
+    pub fn run_prompt(&mut self) {
         let stdin = std::io::stdin();
         loop {
             print!("> ");
@@ -64,7 +65,7 @@ mod test {
 
     #[test]
     fn test_loxr() {
-        let lox = Lox::new();
+        let mut lox = Lox::new();
         lox.run_file("lox/main.lox");
     }
 }

@@ -3,7 +3,7 @@ use lox_rs::Lox;
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();
     println!("Arguments: {:?}", args);
-    let lox = Lox::new();
+    let mut lox = Lox::new();
     if args.len() > 2 {
         println!("Usage: lox-rs [script]");
         std::process::exit(64);
