@@ -10,6 +10,10 @@ use crate::scanner::token::Token;
 
 generate_ast! {
     Expr {
+        Assign(assign_visit) {
+            name: Token,
+            value: Box<dyn Expr>,
+        },
         Binary(binary_visit) {
             left: Box<dyn Expr>,
             operator: Token,
@@ -33,6 +37,9 @@ generate_ast! {
         Print(print_visit) {
             expression: Box<dyn Expr>,
         },
+        Block(block_visit) {
+            statements: Vec<Box<dyn Stmt>>,
+        },
         Expression(expression_visit) {
             expression: Box<dyn Expr>,
         },
@@ -46,6 +53,10 @@ generate_ast! {
 pub struct PrintExprVisitor;
 
 impl ExprVisitor for PrintExprVisitor {
+    fn assign_visit(&mut self, expr: &Assign) -> Option<LoxType> {
+        todo!()
+    }
+
     fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
         print!("([binary] ");
         expr.left.accept(self);

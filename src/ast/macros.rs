@@ -32,6 +32,7 @@ macro_rules! generate_ast {
                 pub trait $ast_name:Debug {
                     fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Option<LoxType>;
                     fn get_type(&self) -> [<$ast_name Type>];
+                    fn as_any(&self) -> &dyn std::any::Any;
                 }
 
                 $(
@@ -49,6 +50,10 @@ macro_rules! generate_ast {
 
                         fn get_type(&self) -> [<$ast_name Type>] {
                             [<$ast_name Type>]::$struct_name
+                        }
+
+                        fn as_any(&self) -> &dyn std::any::Any {
+                            self
                         }
                     }
 

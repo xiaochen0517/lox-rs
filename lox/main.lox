@@ -1,13 +1,25 @@
-// 1 + ( 2 * 3 ) - 4 / ( 1 + 1 )
-// 2 + 2
-
-print "Hello, Lox!\n";
-print true;
-print 100 + 200  + "\n";
-// print nil;
-
 var a = 10;
 var b = 20;
 var c = a + b * 2;
-print "------------\n";
+print a + "\n";
+print b + "\n";
+print c + "\n";
+{
+    var a = 100;
+    var b = 200;
+    var c = a + b * 2;
+    print a + "\n";
+    print b + "\n";
+    print c + "\n";
+    {
+         var a = 110;
+         var b = 210;
+         var c = a + b * 2;
+         print a + "\n";
+         print b + "\n";
+         print c + "\n";
+    }
+}
+print a + "\n";
+print b + "\n";
 print c + "\n";

@@ -1,0 +1,5 @@
+var name = "Hello";
+var age;
+
+print name + "\n";
+print age;

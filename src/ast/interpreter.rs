@@ -1,4 +1,4 @@
-use crate::ast::{Var, Variable};
+use crate::ast::{Assign, Block, Var, Variable};
 use crate::environment::Environment;
 use crate::{
     ast::{
@@ -7,6 +7,7 @@ use crate::{
     scanner::{LoxType, Token, TokenType},
 };
 use std::any::Any;
+use std::mem;
 use unescape::unescape;
 
 #[derive(Debug)]
@@ -29,6 +30,14 @@ impl Interpreter {
 
     fn execute(&mut self, stmt: &Box<dyn Stmt>) {
         stmt.accept(self);
+    }
+
+    fn execute_block(&mut self, statements: &Vec<Box<dyn Stmt>>, environment: Environment) {
+        let original_env = mem::replace(&mut self.environment, environment);
+        for statement in statements {
+            self.execute(statement);
+        }
+        self.environment = original_env;
     }
 
     fn evaluate(&mut self, expr: &dyn Expr) -> Option<LoxType> {
@@ -70,6 +79,17 @@ impl Interpreter {
 }
 
 impl ExprVisitor for Interpreter {
+    fn assign_visit(&mut self, expr: &Assign) -> Option<LoxType> {
+        let value = self.evaluate(expr.value.as_ref());
+
+        self.environment
+            .assign(expr.name.lexeme.clone(), value.clone())
+            .unwrap_or_else(|err| {
+                panic!("{}", err);
+            });
+        value
+    }
+
     fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
         println!("Visiting Binary Expression: {:?}", expr);
         let left = self.evaluate(expr.left.as_ref());
@@ -221,13 +241,13 @@ impl ExprVisitor for Interpreter {
         match expr.operator.token_type {
             TokenType::Minus => {
                 if let Some(LoxType::Num(num)) = right {
-                    return Some(LoxType::new_num(-*num));
+                    Some(LoxType::new_num(-*num))
                 } else {
                     panic!("Operand must be a number.");
                 }
             }
             _ => {
-                return None;
+                None
             }
         }
     }
@@ -254,21 +274,26 @@ impl StmtVisitor for Interpreter {
                 }
             },
             None => {
-                panic!("Cannot print nil value.");
+                print!("<nil>");
             }
         }
-        return None;
+        None
+    }
+
+    fn block_visit(&mut self, stmt: &Block) -> Option<LoxType> {
+        self.execute_block(&stmt.statements, Environment::new());
+        None
     }
 
     fn expression_visit(&mut self, stmt: &Expression) -> Option<LoxType> {
         self.evaluate(stmt.expression.as_ref());
-        return None;
+        None
     }
 
     fn var_visit(&mut self, stmt: &Var) -> Option<LoxType> {
         let value = self.evaluate(stmt.initializer.as_ref());
         self.environment.define(stmt.name.lexeme.clone(), value);
-        return None;
+        None
     }
 }
 

@@ -2,8 +2,8 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Binary, Expr, Expression, Grouping, Literal, Print, PrintExprVisitor, Stmt, Unary, Var,
-    Variable,
+    Assign, Binary, Block, Expr, Expression, Grouping, Literal, Print, PrintExprVisitor, Stmt,
+    Unary, Var, Variable,
 };
 use crate::parser::error::{ParseError, create_parse_error};
 use crate::scanner::{LoxType, Token, TokenType};
@@ -54,26 +54,59 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Box<dyn Expr>, ParseError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let expr = self.equality()?;
+
+        if self.match_types(vec![TokenType::Equal]) {
+            let equals = self.previous();
+            let value = self.assignment()?;
+
+            if let Some(var_expr) = expr.as_any().downcast_ref::<Variable>() {
+                let name = var_expr.name.clone();
+                return Ok(Box::new(Assign::new(name, value)));
+            }
+
+            let err_message = "Invalid assignment target.";
+            return Err(create_parse_error(&equals, err_message));
+        }
+
+        Ok(expr)
     }
 
     fn statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         if self.match_types(vec![TokenType::Print]) {
             return self.print_statement();
         }
-        return self.expression_statement();
+        if self.match_types(vec![TokenType::LeftBrace]) {
+            return Ok(Box::new(Block::new(self.block()?)));
+        }
+        self.expression_statement()
     }
 
     fn print_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         let value = self.expression()?;
         self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
-        return Ok(Box::new(Print::new(value)));
+        Ok(Box::new(Print::new(value)))
     }
 
     fn expression_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         let expr = self.expression()?;
         self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
-        return Ok(Box::new(Expression::new(expr)));
+        Ok(Box::new(Expression::new(expr)))
+    }
+
+    fn block(&mut self) -> Result<Vec<Box<dyn Stmt>>, ParseError> {
+        let mut statements = Vec::new();
+
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration());
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(statements)
     }
 
     fn equality(&mut self) -> Result<Box<dyn Expr>, ParseError> {
