@@ -1,0 +1,25 @@
+var a = 10;
+
+if (a > 10) {
+    print "a bigger than 10\n";
+} else {
+    print "a less and equal 10\n";
+}
+
+var b = 4;
+
+if (b == 4) {
+    print "b equal 4\n";
+}
+
+if (b == 5) {
+    print "b equal 5\n";
+}
+
+if (a == 10 and b == 4) {
+    print "a equal 10 and b equal 4\n";
+}
+
+if (a > 10 or b == 4) {
+    print "a bigger than 10 or b equal 4\n";
+}

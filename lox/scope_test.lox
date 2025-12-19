@@ -1,0 +1,10 @@
+var a = 0;
+
+print "origin: " + a + "\n";
+
+{
+    a = a + 10;
+    print "in scope: " + a + "\n";
+}
+
+print "out scope: " + a + "\n";

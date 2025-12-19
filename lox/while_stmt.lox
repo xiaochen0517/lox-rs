@@ -1,0 +1,6 @@
+var index = 0;
+
+while (index <= 10) {
+    print "index: " + index + "\n";
+    index = index + 1;
+}

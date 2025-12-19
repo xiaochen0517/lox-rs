@@ -1,4 +1,4 @@
-use crate::ast::{Assign, Block, Var, Variable};
+use crate::ast::{Assign, Block, If, Logical, Var, Variable, While};
 use crate::environment::Environment;
 use crate::{
     ast::{
@@ -7,18 +7,20 @@ use crate::{
     scanner::{LoxType, Token, TokenType},
 };
 use std::any::Any;
+use std::cell::RefCell;
 use std::mem;
+use std::rc::Rc;
 use unescape::unescape;
 
 #[derive(Debug)]
 pub struct Interpreter {
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
-            environment: Environment::new(),
+            environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
 
@@ -33,7 +35,8 @@ impl Interpreter {
     }
 
     fn execute_block(&mut self, statements: &Vec<Box<dyn Stmt>>, environment: Environment) {
-        let original_env = mem::replace(&mut self.environment, environment);
+        let new_rc_environment = Rc::new(RefCell::new(environment));
+        let original_env = mem::replace(&mut self.environment, new_rc_environment);
         for statement in statements {
             self.execute(statement);
         }
@@ -44,14 +47,15 @@ impl Interpreter {
         expr.accept(self)
     }
 
-    fn is_truthy(&self, value: &dyn Any) -> bool {
-        if let Some(bool_value) = value.downcast_ref::<bool>() {
-            return *bool_value;
+    fn is_truthy(&self, value: &Option<LoxType>) -> bool {
+        match value {
+            None => true,
+            Some(lox_type) => match lox_type {
+                LoxType::Str(str) => str.len() > 0,
+                LoxType::Num(num) => **num != 0.0,
+                LoxType::Bool(boolean) => boolean.as_ref().clone(),
+            },
         }
-        if value.is::<()>() {
-            return false;
-        }
-        true
     }
 
     fn panic_none_or_nil(&self, lists: Vec<&Option<LoxType>>) {
@@ -76,6 +80,42 @@ impl Interpreter {
         }
         panic!("Operand must be a number for operator {:?}", operator);
     }
+
+    fn compare_numbers<F>(
+        &self,
+        left: Option<LoxType>,
+        right: Option<LoxType>,
+        compare: F,
+    ) -> Option<LoxType>
+    where
+        F: FnOnce(f64, f64) -> bool,
+    {
+        self.panic_none_or_nil(vec![&left, &right]);
+        match (left.unwrap(), right.unwrap()) {
+            (LoxType::Num(left), LoxType::Num(right)) => {
+                Some(LoxType::new_bool(compare(*left, *right)))
+            }
+            _ => panic!("Operand must be numbers"),
+        }
+    }
+
+    fn calculate_number<F>(
+        &self,
+        left: Option<LoxType>,
+        right: Option<LoxType>,
+        calculate: F,
+    ) -> Option<LoxType>
+    where
+        F: FnOnce(f64, f64) -> f64,
+    {
+        self.panic_none_or_nil(vec![&left, &right]);
+        match (left.unwrap(), right.unwrap()) {
+            (LoxType::Num(left), LoxType::Num(right)) => {
+                Some(LoxType::new_num(calculate(*left, *right)))
+            }
+            _ => panic!("Operand must be numbers"),
+        }
+    }
 }
 
 impl ExprVisitor for Interpreter {
@@ -83,6 +123,7 @@ impl ExprVisitor for Interpreter {
         let value = self.evaluate(expr.value.as_ref());
 
         self.environment
+            .borrow_mut()
             .assign(expr.name.lexeme.clone(), value.clone())
             .unwrap_or_else(|err| {
                 panic!("{}", err);
@@ -131,96 +172,24 @@ impl ExprVisitor for Interpreter {
                     }
                 }
             }
-            TokenType::Minus => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left), LoxType::Num(right)) => {
-                        return Some(LoxType::new_num(*left - *right));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
+            TokenType::Minus => self.calculate_number(left, right, |left, right| left - right),
+            TokenType::Star => self.calculate_number(left, right, |left, right| left * right),
+            TokenType::Slash => self.calculate_number(left, right, |left, right| {
+                if right == 0.0 {
+                    panic!("Division by zero.");
                 }
-            }
-            TokenType::Star => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left), LoxType::Num(right)) => {
-                        return Some(LoxType::new_num(*left * *right));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
-                }
-            }
-            TokenType::Slash => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left_num), LoxType::Num(right_num)) => {
-                        if *right_num == 0.0 {
-                            panic!("Division by zero.");
-                        }
-                        return Some(LoxType::new_num(*left_num / *right_num));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
-                }
-            }
+                left / right
+            }),
             // Comparison operators
-            TokenType::Greater => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left), LoxType::Num(right)) => {
-                        return Some(LoxType::new_bool(*left > *right));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
-                }
-            }
+            TokenType::Greater => self.compare_numbers(left, right, |left, right| left > right),
             TokenType::GreaterEqual => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left), LoxType::Num(right)) => {
-                        return Some(LoxType::new_bool(*left >= *right));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
-                }
+                self.compare_numbers(left, right, |left, right| left >= right)
             }
-            TokenType::Less => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left), LoxType::Num(right)) => {
-                        return Some(LoxType::new_bool(*left < *right));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
-                }
-            }
-            TokenType::LessEqual => {
-                self.panic_none_or_nil(vec![&left, &right]);
-                match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Num(left), LoxType::Num(right)) => {
-                        return Some(LoxType::new_bool(*left <= *right));
-                    }
-                    _ => {
-                        panic!("Operands must be numbers.");
-                    }
-                }
-            }
-            TokenType::BangEqual => {
-                return Some(LoxType::new_bool(!self.is_equal(left, right)));
-            }
-            TokenType::EqualEqual => {
-                return Some(LoxType::new_bool(self.is_equal(left, right)));
-            }
-            _ => {
-                return None;
-            }
+            TokenType::Less => self.compare_numbers(left, right, |left, right| left < right),
+            TokenType::LessEqual => self.compare_numbers(left, right, |left, right| left <= right),
+            TokenType::BangEqual => Some(LoxType::new_bool(!self.is_equal(left, right))),
+            TokenType::EqualEqual => Some(LoxType::new_bool(self.is_equal(left, right))),
+            _ => None,
         }
     }
 
@@ -232,6 +201,22 @@ impl ExprVisitor for Interpreter {
     fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
         println!("Visiting Literal Expression: {:?}", expr);
         expr.value.clone()
+    }
+
+    fn logical_visit(&mut self, expr: &Logical) -> Option<LoxType> {
+        let left = self.evaluate(expr.left.as_ref());
+
+        if expr.operator.token_type == TokenType::Or {
+            if self.is_truthy(&left) {
+                return left;
+            }
+        } else {
+            if !self.is_truthy(&left) {
+                return left;
+            }
+        }
+
+        self.evaluate(expr.right.as_ref())
     }
 
     fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
@@ -246,14 +231,15 @@ impl ExprVisitor for Interpreter {
                     panic!("Operand must be a number.");
                 }
             }
-            _ => {
-                None
-            }
+            _ => None,
         }
     }
 
     fn variable_visit(&mut self, expr: &Variable) -> Option<LoxType> {
-        self.environment.get(expr.name.lexeme.as_str()).clone()
+        self.environment
+            .borrow()
+            .get(expr.name.lexeme.as_str())
+            .clone()
     }
 }
 
@@ -280,8 +266,23 @@ impl StmtVisitor for Interpreter {
         None
     }
 
+    fn if_visit(&mut self, stmt: &If) -> Option<LoxType> {
+        let condition_result = self.evaluate(stmt.condition.as_ref());
+        if self.is_truthy(&condition_result) {
+            self.execute(&stmt.then_branch);
+            return None;
+        }
+        if let Some(else_branch) = stmt.else_branch.as_ref() {
+            self.execute(else_branch);
+        }
+        None
+    }
+
     fn block_visit(&mut self, stmt: &Block) -> Option<LoxType> {
-        self.execute_block(&stmt.statements, Environment::new());
+        self.execute_block(
+            &stmt.statements,
+            Environment::new_with_enclosing(Rc::clone(&self.environment)),
+        );
         None
     }
 
@@ -292,7 +293,18 @@ impl StmtVisitor for Interpreter {
 
     fn var_visit(&mut self, stmt: &Var) -> Option<LoxType> {
         let value = self.evaluate(stmt.initializer.as_ref());
-        self.environment.define(stmt.name.lexeme.clone(), value);
+        self.environment
+            .borrow_mut()
+            .define(stmt.name.lexeme.clone(), value);
+        None
+    }
+
+    fn while_visit(&mut self, stmt: &While) -> Option<LoxType> {
+        let mut condition_result = self.evaluate(stmt.condition.as_ref());
+        while self.is_truthy(&condition_result) {
+            self.execute(&stmt.body);
+            condition_result = self.evaluate(stmt.condition.as_ref());
+        }
         None
     }
 }

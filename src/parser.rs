@@ -2,10 +2,11 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Assign, Binary, Block, Expr, Expression, Grouping, Literal, Print, PrintExprVisitor, Stmt,
-    Unary, Var, Variable,
+    Assign, Binary, Block, Expr, Expression, Grouping, If, Literal, Logical, Print,
+    PrintExprVisitor, Stmt, Unary, Var, Variable, While,
 };
 use crate::parser::error::{ParseError, create_parse_error};
+use crate::scanner::TokenType::Or;
 use crate::scanner::{LoxType, Token, TokenType};
 
 #[derive(Debug)]
@@ -58,7 +59,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Box<dyn Expr>, ParseError> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.match_types(vec![TokenType::Equal]) {
             let equals = self.previous();
@@ -76,12 +77,42 @@ impl Parser {
         Ok(expr)
     }
 
+    fn or(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.and()?;
+
+        while self.match_types(vec![TokenType::Or]) {
+            let operator = self.previous();
+            let right = self.and()?;
+            expr = Box::new(Logical::new(expr, operator, right));
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.equality()?;
+
+        while self.match_types(vec![TokenType::And]) {
+            let operator = self.previous();
+            let right = self.equality()?;
+            expr = Box::new(Logical::new(expr, operator, right));
+        }
+
+        Ok(expr)
+    }
+
     fn statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         if self.match_types(vec![TokenType::Print]) {
             return self.print_statement();
         }
         if self.match_types(vec![TokenType::LeftBrace]) {
             return Ok(Box::new(Block::new(self.block()?)));
+        }
+        if self.match_types(vec![TokenType::If]) {
+            return self.if_statement();
+        }
+        if self.match_types(vec![TokenType::While]) {
+            return self.while_statement();
         }
         self.expression_statement()
     }
@@ -96,6 +127,28 @@ impl Parser {
         let expr = self.expression()?;
         self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
         Ok(Box::new(Expression::new(expr)))
+    }
+
+    fn if_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+
+        let then_branch = self.statement()?;
+        let mut else_branch = None;
+        if self.match_types(vec![TokenType::Else]) {
+            else_branch = Some(self.statement()?);
+        }
+        Ok(Box::new(If::new(condition, then_branch, else_branch)))
+    }
+
+    fn while_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+        let body = self.statement()?;
+
+        Ok(Box::new(While::new(condition, body)))
     }
 
     fn block(&mut self) -> Result<Vec<Box<dyn Stmt>>, ParseError> {

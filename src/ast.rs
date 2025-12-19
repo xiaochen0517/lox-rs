@@ -25,6 +25,11 @@ generate_ast! {
         Literal(literal_visit) {
             value: Option<LoxType>,
         },
+        Logical(logical_visit) {
+            left: Box<dyn Expr>,
+            operator: Token,
+            right: Box<dyn Expr>,
+        },
         Unary(unary_visit) {
             operator: Token,
             right: Box<dyn Expr>,
@@ -37,6 +42,11 @@ generate_ast! {
         Print(print_visit) {
             expression: Box<dyn Expr>,
         },
+        If(if_visit) {
+            condition: Box<dyn Expr>,
+            then_branch: Box<dyn Stmt>,
+            else_branch: Option<Box<dyn Stmt>>,
+        },
         Block(block_visit) {
             statements: Vec<Box<dyn Stmt>>,
         },
@@ -46,6 +56,10 @@ generate_ast! {
         Var(var_visit) {
             name: Token,
             initializer: Box<dyn Expr>
+        },
+        While(while_visit) {
+            condition: Box<dyn Expr>,
+            body: Box<dyn Stmt>
         }
     },
 }
@@ -75,6 +89,10 @@ impl ExprVisitor for PrintExprVisitor {
 
     fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
         return None;
+    }
+
+    fn logical_visit(&mut self, expr: &Logical) -> Option<LoxType> {
+        todo!()
     }
 
     fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
