@@ -6,7 +6,7 @@ use std::fmt::Debug;
 
 use crate::generate_ast;
 use crate::scanner::LoxType;
-use crate::scanner::token::Token;
+use crate::scanner::token::{LoxReturn, Token};
 
 generate_ast! {
     Expr {
@@ -36,6 +36,11 @@ generate_ast! {
         },
         Variable(variable_visit) {
             name: Token,
+        },
+        Call(call_visit) {
+            callee: Box<dyn Expr>,
+            paren: Token,
+            arguments: Vec<Box<dyn Expr>>,
         }
     },
     Stmt {
@@ -60,6 +65,15 @@ generate_ast! {
         While(while_visit) {
             condition: Box<dyn Expr>,
             body: Box<dyn Stmt>
+        },
+        Function(function_visit) {
+            name: Token,
+            params: Vec<Token>,
+            body: Vec<Box<dyn Stmt>>,
+        },
+        Return(return_visit) {
+            keyword: Token,
+            value: Option<Box<dyn Expr>>,
         }
     },
 }
@@ -67,42 +81,46 @@ generate_ast! {
 pub struct PrintExprVisitor;
 
 impl ExprVisitor for PrintExprVisitor {
-    fn assign_visit(&mut self, expr: &Assign) -> Option<LoxType> {
+    fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 
-    fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
+    fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
         print!("([binary] ");
         expr.left.accept(self);
         print!(" {} ", expr.operator.lexeme);
         expr.right.accept(self);
         print!(")");
-        return None;
+        Ok(None)
     }
 
-    fn grouping_visit(&mut self, expr: &Grouping) -> Option<LoxType> {
+    fn grouping_visit(&mut self, expr: &Grouping) -> Result<Option<LoxType>, LoxReturn> {
         print!("([group] ");
         expr.expression.accept(self);
         print!(")");
-        return None;
+        Ok(None)
     }
 
-    fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
-        return None;
+    fn literal_visit(&mut self, expr: &Literal) -> Result<Option<LoxType>, LoxReturn> {
+        Ok(None)
     }
 
-    fn logical_visit(&mut self, expr: &Logical) -> Option<LoxType> {
+    fn logical_visit(&mut self, expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 
-    fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
+    fn unary_visit(&mut self, expr: &Unary) -> Result<Option<LoxType>, LoxReturn> {
         print!("([unary] {} ", expr.operator.lexeme);
         expr.right.accept(self);
         print!(")");
-        return None;
+        Ok(None)
     }
 
-    fn variable_visit(&mut self, expr: &Variable) -> Option<LoxType> {
+    fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
+        todo!()
+    }
+
+    fn call_visit(&mut self, expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 }

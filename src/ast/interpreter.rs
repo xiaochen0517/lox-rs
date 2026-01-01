@@ -1,5 +1,8 @@
-use crate::ast::{Assign, Block, If, Logical, Var, Variable, While};
+use crate::ast::{Assign, Block, Call, Function, If, Logical, Return, Var, Variable, While};
 use crate::environment::Environment;
+use crate::function::LoxFunction;
+use crate::function::native::ClockNativeFunction;
+use crate::scanner::token::LoxReturn;
 use crate::{
     ast::{
         Binary, Expr, ExprVisitor, Expression, Grouping, Literal, Print, Stmt, StmtVisitor, Unary,
@@ -7,7 +10,7 @@ use crate::{
     log_info,
     scanner::{LoxType, Token, TokenType},
 };
-use std::any::Any;
+use maplit::hashmap;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
@@ -15,12 +18,19 @@ use unescape::unescape;
 
 #[derive(Debug)]
 pub struct Interpreter {
-    environment: Rc<RefCell<Environment>>,
+    pub globals: Rc<RefCell<Environment>>,
+    pub environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new_with_values(hashmap! {
+            "clock".to_string() => Some(LoxType::Function(Box::new(
+                ClockNativeFunction::new()
+            ))),
+        })));
         Interpreter {
+            globals: Rc::clone(&globals),
             environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
@@ -31,20 +41,25 @@ impl Interpreter {
         }
     }
 
-    fn execute(&mut self, stmt: &Box<dyn Stmt>) {
-        stmt.accept(self);
+    fn execute(&mut self, stmt: &Box<dyn Stmt>) -> Result<Option<LoxType>, LoxReturn> {
+        stmt.accept(self)
     }
 
-    fn execute_block(&mut self, statements: &Vec<Box<dyn Stmt>>, environment: Environment) {
+    pub fn execute_block(
+        &mut self,
+        statements: &Vec<Box<dyn Stmt>>,
+        environment: Environment,
+    ) -> Result<(), LoxReturn> {
         let new_rc_environment = Rc::new(RefCell::new(environment));
         let original_env = mem::replace(&mut self.environment, new_rc_environment);
         for statement in statements {
-            self.execute(statement);
+            self.execute(statement)?;
         }
         self.environment = original_env;
+        Ok(())
     }
 
-    fn evaluate(&mut self, expr: &dyn Expr) -> Option<LoxType> {
+    fn evaluate(&mut self, expr: &dyn Expr) -> Result<Option<LoxType>, LoxReturn> {
         expr.accept(self)
     }
 
@@ -55,6 +70,9 @@ impl Interpreter {
                 LoxType::Str(str) => str.len() > 0,
                 LoxType::Num(num) => **num != 0.0,
                 LoxType::Bool(boolean) => boolean.as_ref().clone(),
+                LoxType::Function(function) => {
+                    panic!("Cannot evaluate truthiness of function.");
+                }
             },
         }
     }
@@ -87,14 +105,14 @@ impl Interpreter {
         left: Option<LoxType>,
         right: Option<LoxType>,
         compare: F,
-    ) -> Option<LoxType>
+    ) -> Result<Option<LoxType>, LoxReturn>
     where
         F: FnOnce(f64, f64) -> bool,
     {
         self.panic_none_or_nil(vec![&left, &right]);
         match (left.unwrap(), right.unwrap()) {
             (LoxType::Num(left), LoxType::Num(right)) => {
-                Some(LoxType::new_bool(compare(*left, *right)))
+                Ok(Some(LoxType::new_bool(compare(*left, *right))))
             }
             _ => panic!("Operand must be numbers"),
         }
@@ -105,14 +123,14 @@ impl Interpreter {
         left: Option<LoxType>,
         right: Option<LoxType>,
         calculate: F,
-    ) -> Option<LoxType>
+    ) -> Result<Option<LoxType>, LoxReturn>
     where
         F: FnOnce(f64, f64) -> f64,
     {
         self.panic_none_or_nil(vec![&left, &right]);
         match (left.unwrap(), right.unwrap()) {
             (LoxType::Num(left), LoxType::Num(right)) => {
-                Some(LoxType::new_num(calculate(*left, *right)))
+                Ok(Some(LoxType::new_num(calculate(*left, *right))))
             }
             _ => panic!("Operand must be numbers"),
         }
@@ -120,8 +138,8 @@ impl Interpreter {
 }
 
 impl ExprVisitor for Interpreter {
-    fn assign_visit(&mut self, expr: &Assign) -> Option<LoxType> {
-        let value = self.evaluate(expr.value.as_ref());
+    fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
+        let value = self.evaluate(expr.value.as_ref())?;
 
         self.environment
             .borrow_mut()
@@ -129,39 +147,39 @@ impl ExprVisitor for Interpreter {
             .unwrap_or_else(|err| {
                 panic!("{}", err);
             });
-        value
+        Ok(value)
     }
 
-    fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
+    fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
         log_info!("Visiting Binary Expression: {:?}", expr);
-        let left = self.evaluate(expr.left.as_ref());
-        let right = self.evaluate(expr.right.as_ref());
-        
+        let left = self.evaluate(expr.left.as_ref())?;
+        let right = self.evaluate(expr.right.as_ref())?;
+
         match expr.operator.token_type {
             TokenType::Plus => {
                 self.panic_none_or_nil(vec![&left, &right]);
                 match (left.unwrap(), right.unwrap()) {
                     (LoxType::Str(left_str), LoxType::Str(right_str)) => {
-                        return Some(LoxType::Str(Box::new(format!(
+                        return Ok(Some(LoxType::Str(Box::new(format!(
                             "{}{}",
                             *left_str, *right_str
-                        ))));
+                        )))));
                     }
                     (LoxType::Num(left_num), LoxType::Num(right_str)) => {
-                        return Some(LoxType::Num(Box::new(*left_num + *right_str)));
+                        return Ok(Some(LoxType::Num(Box::new(*left_num + *right_str))));
                     }
                     // 一侧为字符串，另一侧为数字时，进行字符串拼接
                     (LoxType::Str(left_str), LoxType::Num(right_num)) => {
-                        return Some(LoxType::Str(Box::new(format!(
+                        return Ok(Some(LoxType::Str(Box::new(format!(
                             "{}{}",
                             *left_str, *right_num
-                        ))));
+                        )))));
                     }
                     (LoxType::Num(left_num), LoxType::Str(right_str)) => {
-                        return Some(LoxType::Str(Box::new(format!(
+                        return Ok(Some(LoxType::Str(Box::new(format!(
                             "{}{}",
                             *left_num, *right_str
-                        ))));
+                        )))));
                     }
                     _ => {
                         panic!("Operands must be numbers or strings.");
@@ -183,65 +201,88 @@ impl ExprVisitor for Interpreter {
             }
             TokenType::Less => self.compare_numbers(left, right, |left, right| left < right),
             TokenType::LessEqual => self.compare_numbers(left, right, |left, right| left <= right),
-            TokenType::BangEqual => Some(LoxType::new_bool(!self.is_equal(left, right))),
-            TokenType::EqualEqual => Some(LoxType::new_bool(self.is_equal(left, right))),
-            _ => None,
+            TokenType::BangEqual => Ok(Some(LoxType::new_bool(!self.is_equal(left, right)))),
+            TokenType::EqualEqual => Ok(Some(LoxType::new_bool(self.is_equal(left, right)))),
+            _ => Ok(None),
         }
     }
 
-    fn grouping_visit(&mut self, expr: &Grouping) -> Option<LoxType> {
+    fn grouping_visit(&mut self, expr: &Grouping) -> Result<Option<LoxType>, LoxReturn> {
         log_info!("Visiting Grouping Expression: {:?}", expr);
         expr.expression.accept(self)
     }
 
-    fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
+    fn literal_visit(&mut self, expr: &Literal) -> Result<Option<LoxType>, LoxReturn> {
         log_info!("Visiting Literal Expression: {:?}", expr);
-        expr.value.clone()
+        Ok(expr.value.clone())
     }
 
-    fn logical_visit(&mut self, expr: &Logical) -> Option<LoxType> {
-        let left = self.evaluate(expr.left.as_ref());
+    fn logical_visit(&mut self, expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
+        let left = self.evaluate(expr.left.as_ref())?;
 
         if expr.operator.token_type == TokenType::Or {
             if self.is_truthy(&left) {
-                return left;
+                return Ok(left);
             }
         } else {
             if !self.is_truthy(&left) {
-                return left;
+                return Ok(left);
             }
         }
 
         self.evaluate(expr.right.as_ref())
     }
 
-    fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
+    fn unary_visit(&mut self, expr: &Unary) -> Result<Option<LoxType>, LoxReturn> {
         log_info!("Visiting Unary Expression: {:?}", expr);
-        let right = self.evaluate(expr.right.as_ref());
+        let right = self.evaluate(expr.right.as_ref())?;
 
         match expr.operator.token_type {
             TokenType::Minus => {
                 if let Some(LoxType::Num(num)) = right {
-                    Some(LoxType::new_num(-*num))
+                    Ok(Some(LoxType::new_num(-*num)))
                 } else {
                     panic!("Operand must be a number.");
                 }
             }
-            _ => None,
+            _ => Ok(None),
         }
     }
 
-    fn variable_visit(&mut self, expr: &Variable) -> Option<LoxType> {
-        self.environment
+    fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
+        Ok(self
+            .environment
             .borrow()
             .get(expr.name.lexeme.as_str())
-            .clone()
+            .clone())
+    }
+
+    fn call_visit(&mut self, expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
+        let callee = self.evaluate(expr.callee.as_ref())?;
+        let mut arguments = Vec::new();
+        for argument in &expr.arguments {
+            arguments.push(self.evaluate(argument.as_ref())?);
+        }
+        // 需要确保 callee 是一个函数
+        if let Some(LoxType::Function(mut function)) = callee {
+            // 检查调用的参数数量是否匹配
+            if arguments.len() != function.arity() {
+                panic!(
+                    "Expected {} arguments but got {}.",
+                    function.arity(),
+                    arguments.len()
+                );
+            }
+            Ok(function.call(self, &arguments))
+        } else {
+            panic!("Can only call functions.");
+        }
     }
 }
 
 impl StmtVisitor for Interpreter {
-    fn print_visit(&mut self, stmt: &Print) -> Option<LoxType> {
-        let value = self.evaluate(stmt.expression.as_ref());
+    fn print_visit(&mut self, stmt: &Print) -> Result<Option<LoxType>, LoxReturn> {
+        let value = self.evaluate(stmt.expression.as_ref())?;
         match value {
             Some(v) => match v {
                 LoxType::Str(s) => match unescape(&*s.as_str()) {
@@ -254,61 +295,79 @@ impl StmtVisitor for Interpreter {
                 LoxType::Bool(b) => {
                     print!("{}", *b);
                 }
+                LoxType::Function(_) => {
+                    print!("<function>");
+                }
             },
             None => {
                 print!("<nil>");
             }
         }
-        None
+        Ok(None)
     }
 
-    fn if_visit(&mut self, stmt: &If) -> Option<LoxType> {
-        let condition_result = self.evaluate(stmt.condition.as_ref());
+    fn if_visit(&mut self, stmt: &If) -> Result<Option<LoxType>, LoxReturn> {
+        let condition_result = self.evaluate(stmt.condition.as_ref())?;
         if self.is_truthy(&condition_result) {
             self.execute(&stmt.then_branch);
-            return None;
+            return Ok(None);
         }
         if let Some(else_branch) = stmt.else_branch.as_ref() {
             self.execute(else_branch);
         }
-        None
+        Ok(None)
     }
 
-    fn block_visit(&mut self, stmt: &Block) -> Option<LoxType> {
+    fn block_visit(&mut self, stmt: &Block) -> Result<Option<LoxType>, LoxReturn> {
         self.execute_block(
             &stmt.statements,
-            Environment::new_with_enclosing(Rc::clone(&self.environment)),
+            Environment::new_with_enclosing(self.environment.clone()),
         );
-        None
+        Ok(None)
     }
 
-    fn expression_visit(&mut self, stmt: &Expression) -> Option<LoxType> {
+    fn expression_visit(&mut self, stmt: &Expression) -> Result<Option<LoxType>, LoxReturn> {
         self.evaluate(stmt.expression.as_ref());
-        None
+        Ok(None)
     }
 
-    fn var_visit(&mut self, stmt: &Var) -> Option<LoxType> {
-        let value = self.evaluate(stmt.initializer.as_ref());
+    fn var_visit(&mut self, stmt: &Var) -> Result<Option<LoxType>, LoxReturn> {
+        let value = self.evaluate(stmt.initializer.as_ref())?;
         self.environment
             .borrow_mut()
             .define(stmt.name.lexeme.clone(), value);
-        None
+        Ok(None)
     }
 
-    fn while_visit(&mut self, stmt: &While) -> Option<LoxType> {
-        let mut condition_result = self.evaluate(stmt.condition.as_ref());
+    fn while_visit(&mut self, stmt: &While) -> Result<Option<LoxType>, LoxReturn> {
+        let mut condition_result = self.evaluate(stmt.condition.as_ref())?;
         while self.is_truthy(&condition_result) {
             self.execute(&stmt.body);
-            condition_result = self.evaluate(stmt.condition.as_ref());
+            condition_result = self.evaluate(stmt.condition.as_ref())?;
         }
-        None
+        Ok(None)
+    }
+
+    fn function_visit(&mut self, stmt: &Function) -> Result<Option<LoxType>, LoxReturn> {
+        let function = LoxFunction::new(stmt.clone());
+        self.environment.borrow_mut().define(
+            stmt.name.lexeme.clone(),
+            Some(LoxType::new_function(Box::new(function))),
+        );
+        Ok(None)
+    }
+
+    fn return_visit(&mut self, stmt: &Return) -> Result<Option<LoxType>, LoxReturn> {
+        let mut value = None;
+        if let Some(return_value) = stmt.value.as_ref() {
+            value = self.evaluate(return_value.as_ref())?;
+        }
+        Err(LoxReturn::new(value))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::sync::OnceLock;
-
     use super::*;
 
     fn get_number_one() -> Box<Literal> {

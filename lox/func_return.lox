@@ -1,0 +1,7 @@
+fun add(a,b) {
+    print "a: " + a + ";b: " + b + "\n";
+    return a + b;
+}
+
+var result = add(3, 4);
+print "result: " + result + "\n";

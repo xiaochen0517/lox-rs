@@ -1,4 +1,8 @@
+use crate::Lox;
+use crate::ast::interpreter::Interpreter;
+use std::any::Any;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,11 +57,53 @@ pub enum TokenType {
     Eof,
 }
 
+pub trait Callable: Debug + Send + Sync {
+    fn call(
+        &mut self,
+        interpreter: &mut Interpreter,
+        arguments: &Vec<Option<LoxType>>,
+    ) -> Option<LoxType>;
+
+    fn arity(&self) -> usize;
+
+    // 支持克隆
+    fn clone_box(&self) -> Box<dyn Callable>;
+
+    // 支持比较
+    fn eq_callable(&self, other: &dyn Callable) -> bool;
+
+    // 用于 downcast，支持比较具体类型
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl Clone for Box<dyn Callable> {
+    fn clone(&self) -> Box<dyn Callable> {
+        self.clone_box()
+    }
+}
+
+impl PartialEq for dyn Callable {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq_callable(other)
+    }
+}
+
+pub struct LoxReturn {
+    pub value: Option<LoxType>,
+}
+
+impl LoxReturn {
+    pub fn new(value: Option<LoxType>) -> Self {
+        LoxReturn { value }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoxType {
     Str(Box<String>),
     Num(Box<f64>),
     Bool(Box<bool>),
+    Function(Box<dyn Callable>),
 }
 
 impl LoxType {
@@ -71,6 +117,10 @@ impl LoxType {
 
     pub fn new_bool(b: bool) -> Self {
         LoxType::Bool(Box::new(b))
+    }
+
+    pub fn new_function(func: Box<dyn Callable>) -> Self {
+        LoxType::Function(func)
     }
 }
 

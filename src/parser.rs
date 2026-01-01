@@ -2,8 +2,8 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Assign, Binary, Block, Expr, Expression, Grouping, If, Literal, Logical, Print,
-    PrintExprVisitor, Stmt, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Expr, Expression, Grouping, If, Literal, Logical, Print,
+    PrintExprVisitor, Return, Stmt, Unary, Var, Variable, While,
 };
 use crate::parser::error::{ParseError, create_parse_error};
 use crate::scanner::TokenType::Or;
@@ -29,7 +29,9 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Box<dyn Stmt> {
-        let result = if self.match_types(vec![TokenType::Var]) {
+        let result = if self.match_types(vec![TokenType::Fun]) {
+            self.function("function")
+        } else if self.match_types(vec![TokenType::Var]) {
             self.var_declaration()
         } else {
             self.statement()
@@ -38,6 +40,42 @@ impl Parser {
             self.synchronize();
             Box::new(Expression::new(Box::new(Literal::new(None))))
         })
+    }
+
+    fn function(&mut self, kind: &str) -> Result<Box<dyn Stmt>, ParseError> {
+        let name = self.consume(
+            TokenType::Identifier,
+            format!("Expect '{}' name.", kind).as_str(),
+        )?;
+        // 解析括号部分
+        self.consume(
+            TokenType::LeftParen,
+            format!("Expect '(' after {} name.", kind).as_str(),
+        )?;
+        let mut parameters = Vec::new();
+        if !self.check(TokenType::RightParen) {
+            loop {
+                if parameters.len() >= 255 {
+                    return Err(ParseError::new("Can't have more than 255 parameters."));
+                }
+                parameters.push(self.consume(TokenType::Identifier, "Expect parameter name")?);
+                if !self.match_types(vec![TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(
+            TokenType::RightParen,
+            format!("Expect ')' after parameters of {}.", kind).as_str(),
+        )?;
+        // 解析函数体部分
+        self.consume(
+            TokenType::LeftBrace,
+            format!("Expect '{{' before {} body.", kind).as_str(),
+        )?;
+        let body = self.block()?;
+        // 拼接函数节点并返回
+        Ok(Box::new(crate::ast::Function::new(name, parameters, body)))
     }
 
     fn var_declaration(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
@@ -105,6 +143,9 @@ impl Parser {
         if self.match_types(vec![TokenType::Print]) {
             return self.print_statement();
         }
+        if self.match_types(vec![TokenType::Return]) {
+            return self.return_statement();
+        }
         if self.match_types(vec![TokenType::LeftBrace]) {
             return Ok(Box::new(Block::new(self.block()?)));
         }
@@ -118,6 +159,16 @@ impl Parser {
             return self.for_statement();
         }
         self.expression_statement()
+    }
+
+    fn return_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        let keyword = self.previous();
+        let mut value: Option<Box<dyn Expr>> = None;
+        if !self.check(TokenType::Semicolon) {
+            value = Some(self.expression()?);
+        }
+        self.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
+        Ok(Box::new(Return::new(keyword, value)))
     }
 
     fn for_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
@@ -272,7 +323,36 @@ impl Parser {
             let right = self.unary()?;
             return Ok(Box::new(Unary::new(operator, right)));
         }
-        return self.primary();
+        self.call()
+    }
+
+    fn call(&mut self) -> Result<Box<dyn Expr>, ParseError> {
+        let mut expr = self.primary()?;
+        loop {
+            if self.match_types(vec![TokenType::LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Box<dyn Expr>) -> Result<Box<dyn Expr>, ParseError> {
+        let mut arguments = Vec::new();
+        if !self.check(TokenType::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    return Err(ParseError::new("Can't have more than 255 arguments."));
+                }
+                arguments.push(self.expression()?);
+                if !self.match_types(vec![TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
+        Ok(Box::new(Call::new(callee, paren, arguments)))
     }
 
     fn primary(&mut self) -> Result<Box<dyn Expr>, ParseError> {
@@ -293,8 +373,7 @@ impl Parser {
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Box::new(Grouping::new(expr)));
         }
-        let err_message = "Expect expression.";
-        return Err(create_parse_error(self.peek(), err_message));
+        Err(create_parse_error(self.peek(), "Expect expression."))
     }
 
     fn synchronize(&mut self) {

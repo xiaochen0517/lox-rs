@@ -1,5 +1,5 @@
 use crate::scanner::LoxType;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -21,6 +21,13 @@ impl Environment {
         Environment {
             enclosing: enclosing.into(),
             values: HashMap::new(),
+        }
+    }
+
+    pub fn new_with_values(values: HashMap<String, Option<LoxType>>) -> Self {
+        Environment {
+            enclosing: None,
+            values,
         }
     }
 

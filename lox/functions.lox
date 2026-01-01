@@ -1,0 +1,12 @@
+fun count(n) {
+    if (n > 1) count(n - 1);
+    print n;
+}
+
+count(5);
+
+fun sayHello(name) {
+    print "Hello, " + name + "!\n";
+}
+
+sayHello("World");
