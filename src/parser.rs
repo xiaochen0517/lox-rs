@@ -114,7 +114,59 @@ impl Parser {
         if self.match_types(vec![TokenType::While]) {
             return self.while_statement();
         }
+        if self.match_types(vec![TokenType::For]) {
+            return self.for_statement();
+        }
         self.expression_statement()
+    }
+
+    fn for_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
+        // 解析初始化部分
+        let mut initializer: Option<Box<dyn Stmt>> = None;
+        if (self.match_types(vec![TokenType::Semicolon])) {
+            // 省略初始化部分
+            initializer = None;
+        } else if self.match_types(vec![TokenType::Var]) {
+            // 初始化部分为变量定义
+            initializer = Some(self.var_declaration()?);
+        } else {
+            // 初始化部分为一个表达式
+            initializer = Some(self.expression_statement()?);
+        }
+        // 解析条件表达式
+        let mut condition: Option<Box<dyn Expr>> = None;
+        if !self.check(TokenType::Semicolon) {
+            // 条件表达式存在
+            condition = Some(self.expression()?);
+        }
+        self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
+        // 解析后处理部分
+        let mut increment: Option<Box<dyn Expr>> = None;
+        if !self.check(TokenType::RightParen) {
+            // 后处理部分存在
+            increment = Some(self.expression()?);
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
+        // 获取到主要执行部分
+        let mut body = self.statement()?;
+        // 脱糖流程，将for转换为while格式
+        // 将自增后处理部分合并到body中
+        if increment.is_some() {
+            let increment_expression = Box::new(Expression::new(increment.unwrap()));
+            body = Box::new(Block::new(vec![body, increment_expression]));
+        }
+        // 将条件部分与body合并
+        if condition.is_none() {
+            let true_expr = Literal::new(Some(LoxType::new_bool(true)));
+            condition = Some(Box::new(true_expr));
+        }
+        body = Box::new(While::new(condition.unwrap(), body));
+        // 将初始化部分与body合并
+        if initializer.is_some() {
+            body = Box::new(Block::new(vec![initializer.unwrap(), body]));
+        }
+        Ok(body)
     }
 
     fn print_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {

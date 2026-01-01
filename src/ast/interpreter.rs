@@ -4,6 +4,7 @@ use crate::{
     ast::{
         Binary, Expr, ExprVisitor, Expression, Grouping, Literal, Print, Stmt, StmtVisitor, Unary,
     },
+    log_info,
     scanner::{LoxType, Token, TokenType},
 };
 use std::any::Any;
@@ -132,15 +133,10 @@ impl ExprVisitor for Interpreter {
     }
 
     fn binary_visit(&mut self, expr: &Binary) -> Option<LoxType> {
-        println!("Visiting Binary Expression: {:?}", expr);
+        log_info!("Visiting Binary Expression: {:?}", expr);
         let left = self.evaluate(expr.left.as_ref());
         let right = self.evaluate(expr.right.as_ref());
-        // if left.is_none() || right.is_none() {
-        //     panic!("Operands must not be nil.");
-        // }
-        // let left = left.unwrap();
-        // let right = right.unwrap();
-
+        
         match expr.operator.token_type {
             TokenType::Plus => {
                 self.panic_none_or_nil(vec![&left, &right]);
@@ -194,12 +190,12 @@ impl ExprVisitor for Interpreter {
     }
 
     fn grouping_visit(&mut self, expr: &Grouping) -> Option<LoxType> {
-        println!("Visiting Grouping Expression: {:?}", expr);
+        log_info!("Visiting Grouping Expression: {:?}", expr);
         expr.expression.accept(self)
     }
 
     fn literal_visit(&mut self, expr: &Literal) -> Option<LoxType> {
-        println!("Visiting Literal Expression: {:?}", expr);
+        log_info!("Visiting Literal Expression: {:?}", expr);
         expr.value.clone()
     }
 
@@ -220,7 +216,7 @@ impl ExprVisitor for Interpreter {
     }
 
     fn unary_visit(&mut self, expr: &Unary) -> Option<LoxType> {
-        println!("Visiting Unary Expression: {:?}", expr);
+        log_info!("Visiting Unary Expression: {:?}", expr);
         let right = self.evaluate(expr.right.as_ref());
 
         match expr.operator.token_type {

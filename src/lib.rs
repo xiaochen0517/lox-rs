@@ -2,10 +2,11 @@ use crate::ast::interpreter::Interpreter;
 use crate::parser::Parser;
 
 mod ast;
+mod environment;
+mod log;
 mod parser;
 mod prompt;
 mod scanner;
-mod environment;
 
 #[derive(Debug)]
 pub struct Lox {
@@ -23,7 +24,7 @@ impl Lox {
         let mut scanner = scanner::Scanner::new(content);
         let tokens = scanner.scan_tokens();
         for token in tokens.iter() {
-            println!("{:?}", token);
+            log_info!("{:?}", token);
         }
         let mut parser = Parser::new(tokens);
         let statements = parser.parse();
