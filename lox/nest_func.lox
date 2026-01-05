@@ -1,0 +1,27 @@
+fun parent() {
+    var x = "outside";
+
+    fun nested() {
+        x = x + " inside";
+        print x + "\n";
+    }
+
+    return nested;
+}
+
+var closure = parent();
+closure(); // Should print "outside inside"
+closure(); // Should print "outside inside inside"
+
+print x + "\n"; // Should raise an error: Undefined variable 'x'.
+
+var a = "global a";
+
+{
+    fun showA() {
+        print a + "\n"; // Should print "global a"
+    }
+    showA();
+    var a = "local a";
+    showA();
+}

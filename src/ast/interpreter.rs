@@ -14,24 +14,25 @@ use maplit::hashmap;
 use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use unescape::unescape;
 
 #[derive(Debug)]
 pub struct Interpreter {
-    pub globals: Rc<RefCell<Environment>>,
-    pub environment: Rc<RefCell<Environment>>,
+    pub globals: Arc<Mutex<Environment>>,
+    pub environment: Arc<Mutex<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        let globals = Rc::new(RefCell::new(Environment::new_with_values(hashmap! {
+        let globals = Arc::new(Mutex::new(Environment::new_with_values(hashmap! {
             "clock".to_string() => Some(LoxType::Function(Box::new(
                 ClockNativeFunction::new()
             ))),
         })));
         Interpreter {
-            globals: Rc::clone(&globals),
-            environment: Rc::new(RefCell::new(Environment::new())),
+            globals: Arc::clone(&globals),
+            environment: Arc::clone(&globals),
         }
     }
 
@@ -51,7 +52,7 @@ impl Interpreter {
         statements: &Vec<Box<dyn Stmt>>,
         environment: Environment,
     ) -> Result<(), LoxReturn> {
-        let new_rc_environment = Rc::new(RefCell::new(environment));
+        let new_rc_environment = Arc::new(Mutex::new(environment));
         let original_env = mem::replace(&mut self.environment, new_rc_environment);
         for statement in statements {
             self.execute(statement)?;
@@ -144,7 +145,8 @@ impl ExprVisitor for Interpreter {
         let value = self.evaluate(expr.value.as_ref())?;
 
         self.environment
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .assign(expr.name.lexeme.clone(), value.clone())
             .unwrap_or_else(|err| {
                 panic!("{}", err);
@@ -243,7 +245,8 @@ impl ExprVisitor for Interpreter {
     fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
         Ok(self
             .environment
-            .borrow()
+            .lock()
+            .unwrap()
             .get(expr.name.lexeme.as_str())
             .clone())
     }
@@ -325,7 +328,8 @@ impl StmtVisitor for Interpreter {
     fn var_visit(&mut self, stmt: &Var) -> Result<Option<LoxType>, LoxReturn> {
         let value = self.evaluate(stmt.initializer.as_ref())?;
         self.environment
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .define(stmt.name.lexeme.clone(), value);
         Ok(None)
     }
@@ -340,8 +344,8 @@ impl StmtVisitor for Interpreter {
     }
 
     fn function_visit(&mut self, stmt: &Function) -> Result<Option<LoxType>, LoxReturn> {
-        let function = LoxFunction::new(stmt.clone());
-        self.environment.borrow_mut().define(
+        let function = LoxFunction::new(stmt.clone(), Some(self.environment.clone()));
+        self.environment.lock().unwrap().define(
             stmt.name.lexeme.clone(),
             Some(LoxType::new_function(Box::new(function))),
         );

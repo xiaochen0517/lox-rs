@@ -1,11 +1,10 @@
 use crate::scanner::LoxType;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    enclosing: Option<Arc<Mutex<Environment>>>,
     values: HashMap<String, Option<LoxType>>,
 }
 
@@ -17,7 +16,7 @@ impl Environment {
         }
     }
 
-    pub fn new_with_enclosing(enclosing: Rc<RefCell<Environment>>) -> Self {
+    pub fn new_with_enclosing(enclosing: Arc<Mutex<Environment>>) -> Self {
         Environment {
             enclosing: enclosing.into(),
             values: HashMap::new(),
@@ -25,6 +24,7 @@ impl Environment {
     }
 
     pub fn new_with_values(values: HashMap<String, Option<LoxType>>) -> Self {
+        println!("new environment with values: {:?}", values);
         Environment {
             enclosing: None,
             values,
@@ -41,7 +41,7 @@ impl Environment {
             return value.clone();
         }
         if let Some(enclosing) = &self.enclosing {
-            return enclosing.borrow().get(name);
+            return enclosing.lock().unwrap().get(name);
         }
         panic!("Undefined variable '{}'.", name);
     }
@@ -52,7 +52,7 @@ impl Environment {
             return Ok(());
         }
         if let Some(enclosing) = &self.enclosing {
-            return enclosing.borrow_mut().assign(name.clone(), value);
+            return enclosing.lock().unwrap().assign(name.clone(), value);
         }
 
         Err(format!("Undefined variable '{}'.", name))

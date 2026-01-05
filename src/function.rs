@@ -5,17 +5,22 @@ use crate::log_info;
 use crate::scanner::token::Callable;
 use crate::scanner::LoxType;
 use std::any::Any;
+use std::sync::{Arc, Mutex};
 
 pub mod native;
 
 #[derive(Debug, Clone)]
 pub struct LoxFunction {
     declaration: Function,
+    closure: Option<Arc<Mutex<Environment>>>,
 }
 
 impl LoxFunction {
-    pub fn new(declaration: Function) -> Self {
-        LoxFunction { declaration }
+    pub fn new(declaration: Function, closure: Option<Arc<Mutex<Environment>>>) -> Self {
+        LoxFunction {
+            declaration,
+            closure,
+        }
     }
 }
 
@@ -25,7 +30,12 @@ impl Callable for LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[Option<LoxType>],
     ) -> Option<LoxType> {
-        let mut environment = Environment::new_with_enclosing(interpreter.environment.clone());
+        let mut environment;
+        if let Some(closure) = &self.closure {
+            environment = Environment::new_with_enclosing(closure.clone());
+        } else {
+            environment = Environment::new();
+        }
         for index in 0..self.declaration.params.len() {
             let declaration_param = self.declaration.params.get(index).expect("param exist");
             let argument = arguments.get(index).expect("argument exist");
