@@ -30,21 +30,21 @@ impl Callable for LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[Option<LoxType>],
     ) -> Option<LoxType> {
-        let mut environment;
+        let mut local_env;
         if let Some(closure) = &self.closure {
-            environment = Environment::new_with_enclosing(closure.clone());
+            local_env = Environment::new_with_enclosing(closure.clone());
         } else {
-            environment = Environment::new();
+            local_env = Environment::new();
         }
         for index in 0..self.declaration.params.len() {
             let declaration_param = self.declaration.params.get(index).expect("param exist");
             let argument = arguments.get(index).expect("argument exist");
-            environment.define(declaration_param.lexeme.clone(), argument.clone())
+            local_env.define(declaration_param.lexeme.clone(), argument.clone())
         }
-        match interpreter.execute_block(&self.declaration.body, environment) {
+        match interpreter.execute_block(&self.declaration.body, local_env) {
             Ok(_) => None,
             Err(lox_return) => {
-                log_info!("Function returned with value: {:?}", lox_return.value);
+                log_info!("函数存在返回值: {:?}", lox_return.value);
                 lox_return.value
             }
         }

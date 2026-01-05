@@ -3,10 +3,10 @@ use crate::ast::{
     Assign, Binary, Block, Call, Expr, ExprVisitor, Expression, Function, Grouping, If, Literal,
     Logical, Print, Return, Stmt, StmtVisitor, Unary, Var, Variable, While,
 };
-use crate::log_info;
 use crate::prompt::Prompt;
 use crate::scanner::token::LoxReturn;
 use crate::scanner::{LoxType, Token};
+use crate::{Lox, log_info};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,6 +63,12 @@ impl Resolver {
             return;
         }
         let scope = self.scopes.last_mut().unwrap();
+        if scope.contains_key(&name.lexeme) {
+            Prompt::error(
+                name,
+                "A variable with this name already declared in this scope.",
+            );
+        }
         scope.insert(name.lexeme.clone(), false);
     }
 
@@ -74,15 +80,12 @@ impl Resolver {
         scope.insert(name.lexeme.clone(), true);
     }
 
-    fn resolve_local(&mut self, expr: &Box<dyn Expr>, name: &Token) {
-        log_info!("Resolving local variable size: {}", self.scopes.len());
-        for index in (0..self.scopes.len()).rev() {
-            let scope = &self.scopes[index];
-            log_info!("Checking scope {}: {:?}", index, scope);
+    fn resolve_local<T: Expr>(&mut self, expr: &T, name: &Token) {
+        log_info!("变量解析，数量: {}", self.scopes.len());
+        for (index, scope) in self.scopes.iter().rev().enumerate() {
+            log_info!("检查作用域 {}: {:?}", index, scope);
             if scope.contains_key(&name.lexeme) {
-                let _ = self
-                    .interpreter
-                    .resolve(expr.clone(), self.scopes.len() - 1 - index);
+                let _ = self.interpreter.resolve(expr, index);
                 return;
             }
         }
@@ -111,7 +114,7 @@ impl Resolver {
 impl ExprVisitor for Resolver {
     fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
         self.resolve_expr(&expr.value)?;
-        self.resolve_local(&expr.box_clone(), &expr.name);
+        self.resolve_local(expr, &expr.name);
         Ok(None)
     }
 
@@ -130,27 +133,28 @@ impl ExprVisitor for Resolver {
         Ok(None)
     }
 
-    fn logical_visit(&mut self, _expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&_expr.left)?;
-        self.resolve_expr(&_expr.right)?;
+    fn logical_visit(&mut self, expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
+        self.resolve_expr(&expr.left)?;
+        self.resolve_expr(&expr.right)?;
         Ok(None)
     }
 
     fn unary_visit(&mut self, expr: &Unary) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.right.box_clone())?;
+        self.resolve_expr(&expr.right)?;
         Ok(None)
     }
 
     fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
-        if let Some(is_defined) = self.scopes.last().unwrap().get(&expr.name.lexeme)
-            && !*is_defined
+        if !self.scopes.is_empty()
+            && self.scopes.last().unwrap().get(expr.name.lexeme.as_str()) == Some(&false)
         {
             Prompt::error(
                 &expr.name,
                 "Cannot read local variable in its own initializer.",
             );
         }
-        self.resolve_local(&expr.box_clone(), &expr.name);
+
+        self.resolve_local(expr, &expr.name);
         Ok(None)
     }
 
@@ -207,7 +211,7 @@ impl StmtVisitor for Resolver {
         self.declare(&stmt.name);
         self.define(&stmt.name);
 
-        self.resolve_function(&stmt, FunctionType::Function)?;
+        self.resolve_function(stmt, FunctionType::Function)?;
         Ok(None)
     }
 
@@ -216,6 +220,7 @@ impl StmtVisitor for Resolver {
             Prompt::error(&stmt.keyword, "Cannot return from top-level code.");
         }
         if let Some(value) = &stmt.value {
+            log_info!("解析 return 语句的值: {:?}", value);
             self.resolve_expr(value)?;
         }
         Ok(None)

@@ -1,6 +1,4 @@
-use crate::ast::{
-    Assign, Block, Call, Function, If, Logical, Return, Var, Variable, While,
-};
+use crate::ast::{Assign, Block, Call, Function, If, Logical, Return, Var, Variable, While};
 use crate::environment::Environment;
 use crate::function::LoxFunction;
 use crate::function::native::ClockNativeFunction;
@@ -58,10 +56,15 @@ impl Interpreter {
         stmt.accept(self)
     }
 
-    pub fn resolve(&mut self, expr: Box<dyn Expr>, depth: usize) -> Result<(), LoxReturn> {
+    pub fn resolve<T: Expr>(&mut self, expr: &T, depth: usize) -> Result<(), LoxReturn> {
         log_info!("添加变量，深度 {}, Hash {}", depth, format!("{:?}", expr));
-        self.locals
-            .insert(format!("{:?}", expr), LocalData { expr, depth });
+        self.locals.insert(
+            format!("{:?}", expr),
+            LocalData {
+                expr: expr.box_clone(),
+                depth,
+            },
+        );
         Ok(())
     }
 
@@ -174,6 +177,7 @@ impl Interpreter {
 
 impl ExprVisitor for Interpreter {
     fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
+        log_info!("解析赋值表达式: {:?}", expr);
         let value = self.evaluate(expr.value.as_ref())?;
 
         let distance = self.locals.get(&format!("{:?}", expr));
@@ -185,7 +189,6 @@ impl ExprVisitor for Interpreter {
                 .unwrap_or_else(|err| {
                     panic!("{}", err);
                 });
-            Ok(value)
         } else {
             self.globals
                 .lock()
@@ -194,8 +197,8 @@ impl ExprVisitor for Interpreter {
                 .unwrap_or_else(|err| {
                     panic!("{}", err);
                 });
-            Ok(value)
         }
+        Ok(value)
     }
 
     fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
@@ -354,7 +357,7 @@ impl StmtVisitor for Interpreter {
     fn block_visit(&mut self, stmt: &Block) -> Result<Option<LoxType>, LoxReturn> {
         let _ = self.execute_block(
             &stmt.statements,
-            Environment::new_with_enclosing(self.environment.clone()),
+            Environment::new_with_enclosing(Arc::clone(&self.environment)),
         );
         Ok(None)
     }
@@ -383,7 +386,7 @@ impl StmtVisitor for Interpreter {
     }
 
     fn function_visit(&mut self, stmt: &Function) -> Result<Option<LoxType>, LoxReturn> {
-        let function = LoxFunction::new(stmt.clone(), Some(self.environment.clone()));
+        let function = LoxFunction::new(stmt.clone(), Some(Arc::clone(&self.environment)));
         self.environment.lock().unwrap().define(
             stmt.name.lexeme.clone(),
             Some(LoxType::new_function(Box::new(function))),

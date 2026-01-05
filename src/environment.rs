@@ -11,6 +11,7 @@ pub struct Environment {
 
 impl Environment {
     pub fn new() -> Self {
+        log_info!("创建新环境");
         Environment {
             enclosing: None,
             values: HashMap::new(),
@@ -18,6 +19,7 @@ impl Environment {
     }
 
     pub fn new_with_enclosing(enclosing: Arc<Mutex<Environment>>) -> Self {
+        log_info!("创建新环境（携带封闭环境）");
         Environment {
             enclosing: enclosing.into(),
             values: HashMap::new(),
@@ -25,7 +27,7 @@ impl Environment {
     }
 
     pub fn new_with_values(values: HashMap<String, Option<LoxType>>) -> Self {
-        log_info!("new environment with values: {:?}", values);
+        log_info!("创建环境（携带默认值）: {:?}", values);
         Environment {
             enclosing: None,
             values,
@@ -51,17 +53,21 @@ impl Environment {
     pub fn get_at(&self, distance: usize, name: &str) -> Option<LoxType> {
         log_info!("获取变量 {} 在距离 {} 的环境中", name, distance);
         self.ancestor(distance)
+            .lock()
+            .unwrap()
             .values
             .get(name)
             .cloned()
             .unwrap_or(None)
     }
 
-    fn ancestor(&self, distance: usize) -> Environment {
-        let mut environment = self.clone();
+    fn ancestor(&self, distance: usize) -> Arc<Mutex<Environment>> {
+        let mut environment = Arc::new(Mutex::new(self.clone()));
         for _ in 0..distance {
-            if let Some(enclosing) = &environment.enclosing {
-                environment = enclosing.clone().lock().unwrap().clone();
+            let env_clone = Arc::clone(&environment);
+            let env_lock = env_clone.lock().unwrap();
+            if let Some(enclosing) = &(env_lock.enclosing) {
+                environment = Arc::clone(enclosing);
             } else {
                 panic!("No enclosing environment at distance {}", distance);
             }
@@ -95,6 +101,8 @@ impl Environment {
             value
         );
         self.ancestor(distance)
+            .lock()
+            .unwrap()
             .values
             .insert(name.lexeme.clone(), value);
         Ok(())
