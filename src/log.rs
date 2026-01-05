@@ -5,10 +5,12 @@ impl Log {
         println!("LOX: [INFO]: {}", message);
     }
 
+    #[allow(unused)]
     pub fn warn(message: &str) {
         println!("LOX: [WARN]: {}", message);
     }
 
+    #[allow(unused)]
     pub fn error(message: &str) {
         eprintln!("LOX: [ERROR]: {}", message);
     }

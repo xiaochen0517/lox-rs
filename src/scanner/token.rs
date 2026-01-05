@@ -1,4 +1,3 @@
-use crate::Lox;
 use crate::ast::interpreter::Interpreter;
 use std::any::Any;
 use std::collections::HashMap;
@@ -61,7 +60,7 @@ pub trait Callable: Debug + Send + Sync {
     fn call(
         &mut self,
         interpreter: &mut Interpreter,
-        arguments: &Vec<Option<LoxType>>,
+        arguments: &[Option<LoxType>],
     ) -> Option<LoxType>;
 
     fn arity(&self) -> usize;
@@ -100,6 +99,7 @@ impl LoxReturn {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoxType {
+    #[allow(clippy::box_collection)]
     Str(Box<String>),
     Num(Box<f64>),
     Bool(Box<bool>),
@@ -151,10 +151,6 @@ impl Token {
             col_end,
             literal,
         }
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("{:?} {} {:?}", self.token_type, self.lexeme, self.literal)
     }
 }
 

@@ -3,15 +3,21 @@ use crate::parser::Parser;
 
 mod ast;
 mod environment;
+mod function;
 mod log;
 mod parser;
 mod prompt;
 mod scanner;
-mod function;
 
 #[derive(Debug)]
 pub struct Lox {
     inerpreter: Interpreter,
+}
+
+impl Default for Lox {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Lox {
@@ -32,6 +38,7 @@ impl Lox {
         self.inerpreter.interpret(&statements);
     }
 
+    #[allow(unused)]
     fn error(line: usize, message: &str) {
         eprintln!("[line {}] Error: {}", line, message);
     }

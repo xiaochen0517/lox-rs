@@ -1,10 +1,9 @@
-use crate::ast::Function;
 use crate::ast::interpreter::Interpreter;
+use crate::ast::Function;
 use crate::environment::Environment;
-use crate::log::Log;
 use crate::log_info;
-use crate::scanner::LoxType;
 use crate::scanner::token::Callable;
+use crate::scanner::LoxType;
 use std::any::Any;
 
 pub mod native;
@@ -24,7 +23,7 @@ impl Callable for LoxFunction {
     fn call(
         &mut self,
         interpreter: &mut Interpreter,
-        arguments: &Vec<Option<LoxType>>,
+        arguments: &[Option<LoxType>],
     ) -> Option<LoxType> {
         let mut environment = Environment::new_with_enclosing(interpreter.environment.clone());
         for index in 0..self.declaration.params.len() {
@@ -36,7 +35,7 @@ impl Callable for LoxFunction {
             Ok(_) => None,
             Err(lox_return) => {
                 log_info!("Function returned with value: {:?}", lox_return.value);
-                return lox_return.value;
+                lox_return.value
             }
         }
     }

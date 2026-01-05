@@ -37,10 +37,11 @@ impl Interpreter {
 
     pub fn interpret(&mut self, statements: &Vec<Box<dyn Stmt>>) {
         for statement in statements {
-            self.execute(statement);
+            let _ = self.execute(statement);
         }
     }
 
+    #[allow(clippy::borrowed_box)]
     fn execute(&mut self, stmt: &Box<dyn Stmt>) -> Result<Option<LoxType>, LoxReturn> {
         stmt.accept(self)
     }
@@ -67,10 +68,10 @@ impl Interpreter {
         match value {
             None => true,
             Some(lox_type) => match lox_type {
-                LoxType::Str(str) => str.len() > 0,
+                LoxType::Str(str) => !str.is_empty(),
                 LoxType::Num(num) => **num != 0.0,
-                LoxType::Bool(boolean) => boolean.as_ref().clone(),
-                LoxType::Function(function) => {
+                LoxType::Bool(boolean) => *boolean.as_ref(),
+                LoxType::Function(_function) => {
                     panic!("Cannot evaluate truthiness of function.");
                 }
             },
@@ -93,6 +94,7 @@ impl Interpreter {
         }
     }
 
+    #[allow(unused)]
     fn check_number_operand(&self, operator: &Token, operand: &Option<LoxType>) {
         if let Some(LoxType::Num(_)) = operand {
             return;
@@ -159,28 +161,19 @@ impl ExprVisitor for Interpreter {
             TokenType::Plus => {
                 self.panic_none_or_nil(vec![&left, &right]);
                 match (left.unwrap(), right.unwrap()) {
-                    (LoxType::Str(left_str), LoxType::Str(right_str)) => {
-                        return Ok(Some(LoxType::Str(Box::new(format!(
-                            "{}{}",
-                            *left_str, *right_str
-                        )))));
-                    }
+                    (LoxType::Str(left_str), LoxType::Str(right_str)) => Ok(Some(LoxType::Str(
+                        Box::new(format!("{}{}", *left_str, *right_str)),
+                    ))),
                     (LoxType::Num(left_num), LoxType::Num(right_str)) => {
-                        return Ok(Some(LoxType::Num(Box::new(*left_num + *right_str))));
+                        Ok(Some(LoxType::Num(Box::new(*left_num + *right_str))))
                     }
                     // 一侧为字符串，另一侧为数字时，进行字符串拼接
-                    (LoxType::Str(left_str), LoxType::Num(right_num)) => {
-                        return Ok(Some(LoxType::Str(Box::new(format!(
-                            "{}{}",
-                            *left_str, *right_num
-                        )))));
-                    }
-                    (LoxType::Num(left_num), LoxType::Str(right_str)) => {
-                        return Ok(Some(LoxType::Str(Box::new(format!(
-                            "{}{}",
-                            *left_num, *right_str
-                        )))));
-                    }
+                    (LoxType::Str(left_str), LoxType::Num(right_num)) => Ok(Some(LoxType::Str(
+                        Box::new(format!("{}{}", *left_str, *right_num)),
+                    ))),
+                    (LoxType::Num(left_num), LoxType::Str(right_str)) => Ok(Some(LoxType::Str(
+                        Box::new(format!("{}{}", *left_num, *right_str)),
+                    ))),
                     _ => {
                         panic!("Operands must be numbers or strings.");
                     }
@@ -224,10 +217,8 @@ impl ExprVisitor for Interpreter {
             if self.is_truthy(&left) {
                 return Ok(left);
             }
-        } else {
-            if !self.is_truthy(&left) {
-                return Ok(left);
-            }
+        } else if !self.is_truthy(&left) {
+            return Ok(left);
         }
 
         self.evaluate(expr.right.as_ref())
@@ -285,7 +276,7 @@ impl StmtVisitor for Interpreter {
         let value = self.evaluate(stmt.expression.as_ref())?;
         match value {
             Some(v) => match v {
-                LoxType::Str(s) => match unescape(&*s.as_str()) {
+                LoxType::Str(s) => match unescape(s.as_str()) {
                     Some(unescaped_str) => print!("{}", unescaped_str),
                     None => print!("{}", *s),
                 },
@@ -309,17 +300,17 @@ impl StmtVisitor for Interpreter {
     fn if_visit(&mut self, stmt: &If) -> Result<Option<LoxType>, LoxReturn> {
         let condition_result = self.evaluate(stmt.condition.as_ref())?;
         if self.is_truthy(&condition_result) {
-            self.execute(&stmt.then_branch);
+            let _ = self.execute(&stmt.then_branch);
             return Ok(None);
         }
         if let Some(else_branch) = stmt.else_branch.as_ref() {
-            self.execute(else_branch);
+            let _ = self.execute(else_branch);
         }
         Ok(None)
     }
 
     fn block_visit(&mut self, stmt: &Block) -> Result<Option<LoxType>, LoxReturn> {
-        self.execute_block(
+        let _ = self.execute_block(
             &stmt.statements,
             Environment::new_with_enclosing(self.environment.clone()),
         );
@@ -327,7 +318,7 @@ impl StmtVisitor for Interpreter {
     }
 
     fn expression_visit(&mut self, stmt: &Expression) -> Result<Option<LoxType>, LoxReturn> {
-        self.evaluate(stmt.expression.as_ref());
+        let _ = self.evaluate(stmt.expression.as_ref());
         Ok(None)
     }
 
@@ -342,7 +333,7 @@ impl StmtVisitor for Interpreter {
     fn while_visit(&mut self, stmt: &While) -> Result<Option<LoxType>, LoxReturn> {
         let mut condition_result = self.evaluate(stmt.condition.as_ref())?;
         while self.is_truthy(&condition_result) {
-            self.execute(&stmt.body);
+            let _ = self.execute(&stmt.body);
             condition_result = self.evaluate(stmt.condition.as_ref())?;
         }
         Ok(None)

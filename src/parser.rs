@@ -2,11 +2,10 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Assign, Binary, Block, Call, Expr, Expression, Grouping, If, Literal, Logical, Print,
-    PrintExprVisitor, Return, Stmt, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Expr, Expression, Grouping, If, Literal, Logical, Print, Return,
+    Stmt, Unary, Var, Variable, While,
 };
 use crate::parser::error::{ParseError, create_parse_error};
-use crate::scanner::TokenType::Or;
 use crate::scanner::{LoxType, Token, TokenType};
 
 #[derive(Debug)]
@@ -36,7 +35,7 @@ impl Parser {
         } else {
             self.statement()
         };
-        result.unwrap_or_else(|err| {
+        result.unwrap_or_else(|_err| {
             self.synchronize();
             Box::new(Expression::new(Box::new(Literal::new(None))))
         })
@@ -174,8 +173,8 @@ impl Parser {
     fn for_statement(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
         // 解析初始化部分
-        let mut initializer: Option<Box<dyn Stmt>> = None;
-        if (self.match_types(vec![TokenType::Semicolon])) {
+        let initializer: Option<Box<dyn Stmt>>;
+        if self.match_types(vec![TokenType::Semicolon]) {
             // 省略初始化部分
             initializer = None;
         } else if self.match_types(vec![TokenType::Var]) {
@@ -203,8 +202,8 @@ impl Parser {
         let mut body = self.statement()?;
         // 脱糖流程，将for转换为while格式
         // 将自增后处理部分合并到body中
-        if increment.is_some() {
-            let increment_expression = Box::new(Expression::new(increment.unwrap()));
+        if let Some(increment) = increment {
+            let increment_expression = Box::new(Expression::new(increment));
             body = Box::new(Block::new(vec![body, increment_expression]));
         }
         // 将条件部分与body合并
@@ -214,8 +213,8 @@ impl Parser {
         }
         body = Box::new(While::new(condition.unwrap(), body));
         // 将初始化部分与body合并
-        if initializer.is_some() {
-            body = Box::new(Block::new(vec![initializer.unwrap(), body]));
+        if let Some(initializer) = initializer {
+            body = Box::new(Block::new(vec![initializer, body]));
         }
         Ok(body)
     }
@@ -408,7 +407,7 @@ impl Parser {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, ParseError> {
@@ -416,7 +415,7 @@ impl Parser {
             return Ok(self.advance());
         }
         let err_message = format!("Parser consume error: {}", message);
-        return Err(create_parse_error(self.peek(), err_message.as_str()));
+        Err(create_parse_error(self.peek(), err_message.as_str()))
     }
 
     fn check(&self, token_type: TokenType) -> bool {
@@ -440,7 +439,7 @@ impl Parser {
         if !self.is_at_end() {
             self.current += 1;
         }
-        return self.previous();
+        self.previous()
     }
 
     fn previous(&self) -> Token {
@@ -453,6 +452,7 @@ impl Parser {
 
 #[cfg(test)]
 mod test {
+    use crate::ast::PrintExprVisitor;
     use crate::scanner::LoxType;
 
     use super::*;
@@ -500,11 +500,11 @@ mod test {
             Token::new(TokenType::Eof, "".to_string(), 1, 10, 10, None),
         ];
         let mut parser = Parser::new(tokens);
-        let mut expr = parser.expression().unwrap();
+        let expr = parser.expression().unwrap();
         println!("{:?}", expr);
 
         let mut printer = PrintExprVisitor;
-        expr.accept(&mut printer);
+        let _ = expr.accept(&mut printer);
         println!();
     }
 }

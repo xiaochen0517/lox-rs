@@ -1,5 +1,3 @@
-use paste::paste;
-
 #[macro_export]
 macro_rules! generate_ast {
     (

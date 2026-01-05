@@ -17,7 +17,7 @@ impl Callable for ClockNativeFunction {
     fn call(
         &mut self,
         _interpreter: &mut Interpreter,
-        _arguments: &Vec<Option<LoxType>>,
+        _arguments: &[Option<LoxType>],
     ) -> Option<LoxType> {
         let current_timestamp = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

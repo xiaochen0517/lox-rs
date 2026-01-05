@@ -78,49 +78,50 @@ generate_ast! {
     },
 }
 
+#[allow(unused)]
 pub struct PrintExprVisitor;
 
 impl ExprVisitor for PrintExprVisitor {
-    fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
+    fn assign_visit(&mut self, _expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 
     fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
         print!("([binary] ");
-        expr.left.accept(self);
+        let _ = expr.left.accept(self);
         print!(" {} ", expr.operator.lexeme);
-        expr.right.accept(self);
+        let _ = expr.right.accept(self);
         print!(")");
         Ok(None)
     }
 
     fn grouping_visit(&mut self, expr: &Grouping) -> Result<Option<LoxType>, LoxReturn> {
         print!("([group] ");
-        expr.expression.accept(self);
+        let _ = expr.expression.accept(self);
         print!(")");
         Ok(None)
     }
 
-    fn literal_visit(&mut self, expr: &Literal) -> Result<Option<LoxType>, LoxReturn> {
+    fn literal_visit(&mut self, _expr: &Literal) -> Result<Option<LoxType>, LoxReturn> {
         Ok(None)
     }
 
-    fn logical_visit(&mut self, expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
+    fn logical_visit(&mut self, _expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 
     fn unary_visit(&mut self, expr: &Unary) -> Result<Option<LoxType>, LoxReturn> {
         print!("([unary] {} ", expr.operator.lexeme);
-        expr.right.accept(self);
+        let _ = expr.right.accept(self);
         print!(")");
         Ok(None)
     }
 
-    fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
+    fn variable_visit(&mut self, _expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 
-    fn call_visit(&mut self, expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
+    fn call_visit(&mut self, _expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
         todo!()
     }
 }
