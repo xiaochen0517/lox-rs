@@ -123,6 +123,17 @@ impl LoxType {
         LoxType::Function(func)
     }
 }
+/*
+impl SimpleHash for LoxType {
+    fn get_hash(&self) -> String {
+        match self {
+            LoxType::Str(s) => format!("Str:{}", s),
+            LoxType::Num(n) => format!("Num:{}", n),
+            LoxType::Bool(b) => format!("Bool:{}", b),
+            LoxType::Function(_) => "Function".to_string(),
+        }
+    }
+}*/
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -153,6 +164,21 @@ impl Token {
         }
     }
 }
+
+/*impl SimpleHash for Token {
+    fn get_hash(&self) -> String {
+        let mut hash_str = String::new();
+        hash_str += &format!("{:?}", self.token_type);
+        hash_str += &self.lexeme;
+        hash_str += &self.line.to_string();
+        hash_str += &self.col_start.to_string();
+        hash_str += &self.col_end.to_string();
+        if let Some(literal) = &self.literal {
+            hash_str += &literal.get_hash();
+        }
+        hash_str
+    }
+}*/
 
 static KEYWORDS_MAP: OnceLock<HashMap<&'static str, TokenType>> = OnceLock::new();
 pub fn get_keywords_map() -> &'static HashMap<&'static str, TokenType> {

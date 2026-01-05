@@ -1,4 +1,5 @@
 use crate::ast::interpreter::Interpreter;
+use crate::ast::resolver::Resolver;
 use crate::parser::Parser;
 
 mod ast;
@@ -35,6 +36,9 @@ impl Lox {
         }
         let mut parser = Parser::new(tokens);
         let statements = parser.parse();
+        let mut resolver = Resolver::new(self.inerpreter.clone());
+        let _ = resolver.resolve_stmts(&statements);
+        self.inerpreter = resolver.get_interpreter();
         self.inerpreter.interpret(&statements);
     }
 

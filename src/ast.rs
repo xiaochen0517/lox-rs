@@ -1,12 +1,62 @@
+use std::hash::Hasher;
 pub mod interpreter;
 mod macros;
+pub mod resolver;
 
 use paste::paste;
 use std::fmt::Debug;
+use std::hash::DefaultHasher;
+use std::hash::Hash;
 
 use crate::generate_ast;
 use crate::scanner::LoxType;
 use crate::scanner::token::{LoxReturn, Token};
+
+/*pub trait SimpleHash {
+    fn get_hash(&self) -> String;
+}
+
+impl SimpleHash for String {
+    fn get_hash(&self) -> String {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        format!("{}", hasher.finish())
+    }
+}
+
+impl<T: SimpleHash> SimpleHash for Box<T> {
+    fn get_hash(&self) -> String {
+        (**self).get_hash()
+    }
+}
+
+impl<T: SimpleHash> SimpleHash for Option<T> {
+    fn get_hash(&self) -> String {
+        match self {
+            Some(value) => value.get_hash(),
+            None => "None".to_string(),
+        }
+    }
+}
+
+impl<T: SimpleHash> SimpleHash for Option<Box<T>> {
+    fn get_hash(&self) -> String {
+        match self {
+            Some(value) => value.get_hash(),
+            None => "None".to_string(),
+        }
+    }
+}
+
+impl<T: SimpleHash> SimpleHash for Vec<T> {
+    fn get_hash(&self) -> String {
+        let mut hash_str = String::new();
+        for item in self {
+            hash_str += &item.get_hash();
+        }
+        hash_str
+    }
+}*/
 
 generate_ast! {
     Expr {
@@ -128,7 +178,6 @@ impl ExprVisitor for PrintExprVisitor {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     #[test]
     fn test_expr() {

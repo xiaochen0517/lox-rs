@@ -27,7 +27,7 @@ macro_rules! generate_ast {
                     )*
                 }
 
-                pub trait $ast_name:Debug + Send + Sync {
+                pub trait $ast_name:Debug + Send + Sync /*+ SimpleHash*/ {
                     fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Result<Option<LoxType>, LoxReturn>;
                     fn get_type(&self) -> [<$ast_name Type>];
                     fn as_any(&self) -> &dyn std::any::Any;
@@ -39,6 +39,12 @@ macro_rules! generate_ast {
                         self.box_clone()
                     }
                 }
+
+                /*impl SimpleHash for Box<dyn $ast_name> {
+                    pub fn get_hash(&self) -> String {
+                        (**self).get_hash()
+                    }
+                }*/
 
                 $(
 
@@ -64,14 +70,35 @@ macro_rules! generate_ast {
                         fn box_clone(&self) -> Box<dyn $ast_name> {
                             Box::new(self.clone())
                         }
+
+                        /*fn get_hash(&self) -> String {
+                            // 获取到所有字段的地址，并进行合并后返回
+                            let mut hash_str = String::new();
+                            $(
+                                hash_str += &self.$field_name.get_hash(&mut hasher);
+                            )*
+                            hash_str
+                        }*/
+
                     }
+/*
+                    impl SimpleHash for $struct_name {
+                        fn get_hash(&self) -> String {
+                            // 获取到所有字段的地址，并进行合并后返回
+                            let mut hash_str = String::new();
+                            $(
+                                hash_str += &self.$field_name.get_hash();
+                            )*
+                            hash_str
+                        }
+                    }*/
 
                     impl $struct_name {
                         pub fn new($($field_name : $field_type),*) -> Self {
                             $struct_name { $($field_name),* }
                         }
                     }
-                )*
+               )*
             )*
         }
     };

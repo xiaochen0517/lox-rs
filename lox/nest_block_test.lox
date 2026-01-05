@@ -1,0 +1,10 @@
+var a = "global a";
+
+{
+    fun showA() {
+        print a + "\n"; // Should print "global a"
+    }
+    showA();
+    var a = "local a";
+    showA();
+}

@@ -1,4 +1,6 @@
-use crate::ast::{Assign, Block, Call, Function, If, Logical, Return, Var, Variable, While};
+use crate::ast::{
+    Assign, Block, Call, Function, If, Logical, Return, Var, Variable, While,
+};
 use crate::environment::Environment;
 use crate::function::LoxFunction;
 use crate::function::native::ClockNativeFunction;
@@ -11,16 +13,24 @@ use crate::{
     scanner::{LoxType, Token, TokenType},
 };
 use maplit::hashmap;
-use std::cell::RefCell;
+use std::collections::HashMap;
 use std::mem;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use unescape::unescape;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+struct LocalData {
+    expr: Box<dyn Expr>,
+    depth: usize,
+}
+
+impl LocalData {}
+
+#[derive(Debug, Clone)]
 pub struct Interpreter {
     pub globals: Arc<Mutex<Environment>>,
     pub environment: Arc<Mutex<Environment>>,
+    pub locals: HashMap<String, LocalData>,
 }
 
 impl Interpreter {
@@ -33,6 +43,7 @@ impl Interpreter {
         Interpreter {
             globals: Arc::clone(&globals),
             environment: Arc::clone(&globals),
+            locals: HashMap::new(),
         }
     }
 
@@ -45,6 +56,27 @@ impl Interpreter {
     #[allow(clippy::borrowed_box)]
     fn execute(&mut self, stmt: &Box<dyn Stmt>) -> Result<Option<LoxType>, LoxReturn> {
         stmt.accept(self)
+    }
+
+    pub fn resolve(&mut self, expr: Box<dyn Expr>, depth: usize) -> Result<(), LoxReturn> {
+        log_info!("添加变量，深度 {}, Hash {}", depth, format!("{:?}", expr));
+        self.locals
+            .insert(format!("{:?}", expr), LocalData { expr, depth });
+        Ok(())
+    }
+
+    fn lookup_variable(&mut self, name: &Token, expr: &Variable) -> Option<LoxType> {
+        log_info!("查询变量 {}, Hash {}", name.lexeme, format!("{:?}", expr));
+        let distance = self.locals.get(&format!("{:?}", expr));
+        log_info!("距离信息: {:?}", distance);
+        if let Some(local_data) = distance {
+            self.environment
+                .lock()
+                .unwrap()
+                .get_at(local_data.depth, &name.lexeme)
+        } else {
+            self.globals.lock().unwrap().get(&name.lexeme)
+        }
     }
 
     pub fn execute_block(
@@ -144,14 +176,26 @@ impl ExprVisitor for Interpreter {
     fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
         let value = self.evaluate(expr.value.as_ref())?;
 
-        self.environment
-            .lock()
-            .unwrap()
-            .assign(expr.name.lexeme.clone(), value.clone())
-            .unwrap_or_else(|err| {
-                panic!("{}", err);
-            });
-        Ok(value)
+        let distance = self.locals.get(&format!("{:?}", expr));
+        if let Some(local_data) = distance {
+            self.environment
+                .lock()
+                .unwrap()
+                .assign_at(local_data.depth, &expr.name, value.clone())
+                .unwrap_or_else(|err| {
+                    panic!("{}", err);
+                });
+            Ok(value)
+        } else {
+            self.globals
+                .lock()
+                .unwrap()
+                .assign(expr.name.lexeme.clone(), value.clone())
+                .unwrap_or_else(|err| {
+                    panic!("{}", err);
+                });
+            Ok(value)
+        }
     }
 
     fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
@@ -243,12 +287,7 @@ impl ExprVisitor for Interpreter {
     }
 
     fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
-        Ok(self
-            .environment
-            .lock()
-            .unwrap()
-            .get(expr.name.lexeme.as_str())
-            .clone())
+        Ok(self.lookup_variable(&expr.name, expr))
     }
 
     fn call_visit(&mut self, expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
