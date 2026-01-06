@@ -1,7 +1,7 @@
 use crate::ast::interpreter::Interpreter;
 use crate::ast::{
-    Assign, Binary, Block, Call, Expr, ExprVisitor, Expression, Function, Grouping, If, Literal,
-    Logical, Print, Return, Stmt, StmtVisitor, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Class, Expr, ExprVisitor, Expression, Function, Grouping, If,
+    Literal, Logical, Print, Return, Stmt, StmtVisitor, Unary, Var, Variable, While,
 };
 use crate::prompt::Prompt;
 use crate::scanner::token::LoxReturn;
@@ -186,6 +186,12 @@ impl StmtVisitor for Resolver {
         self.begin_scope();
         self.resolve_stmts(&stmt.statements)?;
         self.end_scope();
+        Ok(None)
+    }
+
+    fn class_visit(&mut self, stmt: &Class) -> Result<Option<LoxType>, LoxReturn> {
+        self.declare(&stmt.name);
+        self.define(&stmt.name);
         Ok(None)
     }
 

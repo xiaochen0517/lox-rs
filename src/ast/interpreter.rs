@@ -1,4 +1,5 @@
-use crate::ast::{Assign, Block, Call, Function, If, Logical, Return, Var, Variable, While};
+use crate::ast::{Assign, Block, Call, Class, Function, If, Logical, Return, Var, Variable, While};
+use crate::class::LoxClass;
 use crate::environment::Environment;
 use crate::function::LoxFunction;
 use crate::function::native::ClockNativeFunction;
@@ -109,6 +110,9 @@ impl Interpreter {
                 LoxType::Bool(boolean) => *boolean.as_ref(),
                 LoxType::Function(_function) => {
                     panic!("Cannot evaluate truthiness of function.");
+                }
+                LoxType::Class(_class) => {
+                    panic!("Cannot evaluate truthiness of class.");
                 }
             },
         }
@@ -334,6 +338,9 @@ impl StmtVisitor for Interpreter {
                 LoxType::Function(_) => {
                     print!("<function>");
                 }
+                LoxType::Class(class) => {
+                    print!("<class {}>", class.name);
+                }
             },
             None => {
                 print!("<nil>");
@@ -358,6 +365,19 @@ impl StmtVisitor for Interpreter {
         let _ = self.execute_block(
             &stmt.statements,
             Environment::new_with_enclosing(Arc::clone(&self.environment)),
+        );
+        Ok(None)
+    }
+
+    fn class_visit(&mut self, stmt: &Class) -> Result<Option<LoxType>, LoxReturn> {
+        self.environment
+            .lock()
+            .unwrap()
+            .define(stmt.name.lexeme.clone(), None);
+        let class = LoxClass::new(stmt.name.lexeme.as_str());
+        let _ = self.environment.lock().unwrap().assign(
+            stmt.name.lexeme.clone(),
+            Some(LoxType::new_class(Box::new(class))),
         );
         Ok(None)
     }

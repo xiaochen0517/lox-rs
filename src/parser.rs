@@ -2,8 +2,8 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Assign, Binary, Block, Call, Expr, Expression, Grouping, If, Literal, Logical, Print, Return,
-    Stmt, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Class, Expr, Expression, Function, Grouping, If, Literal, Logical,
+    Print, Return, Stmt, Unary, Var, Variable, While,
 };
 use crate::parser::error::{ParseError, create_parse_error};
 use crate::scanner::{LoxType, Token, TokenType};
@@ -28,7 +28,9 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Box<dyn Stmt> {
-        let result = if self.match_types(vec![TokenType::Fun]) {
+        let result = if self.match_types(vec![TokenType::Class]) {
+            self.class_declaration()
+        } else if self.match_types(vec![TokenType::Fun]) {
             self.function("function")
         } else if self.match_types(vec![TokenType::Var]) {
             self.var_declaration()
@@ -39,6 +41,20 @@ impl Parser {
             self.synchronize();
             Box::new(Expression::new(Box::new(Literal::new(None))))
         })
+    }
+
+    fn class_declaration(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
+        let name = self.consume(TokenType::Identifier, "Expect class name.")?;
+        self.consume(TokenType::LeftBrace, "Expect '{' after class name.")?;
+
+        let mut methods = Vec::new();
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            let method_result = self.function("method")?;
+            methods.push(method_result);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after class name.")?;
+        Ok(Box::new(Class::new(name, methods)))
     }
 
     fn function(&mut self, kind: &str) -> Result<Box<dyn Stmt>, ParseError> {

@@ -9,6 +9,7 @@ mod log;
 mod parser;
 mod prompt;
 mod scanner;
+mod class;
 
 #[derive(Debug)]
 pub struct Lox {

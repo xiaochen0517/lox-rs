@@ -1,4 +1,5 @@
 use crate::ast::interpreter::Interpreter;
+use crate::class::LoxClass;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -104,6 +105,7 @@ pub enum LoxType {
     Num(Box<f64>),
     Bool(Box<bool>),
     Function(Box<dyn Callable>),
+    Class(Box<LoxClass>),
 }
 
 impl LoxType {
@@ -121,6 +123,10 @@ impl LoxType {
 
     pub fn new_function(func: Box<dyn Callable>) -> Self {
         LoxType::Function(func)
+    }
+
+    pub fn new_class(class: Box<LoxClass>) -> Self {
+        LoxType::Class(class)
     }
 }
 /*

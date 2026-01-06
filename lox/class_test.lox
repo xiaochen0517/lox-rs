@@ -1,0 +1,7 @@
+class TestClass {
+    printHello() {
+        print "Hello from TestClass!";
+    }
+}
+
+print TestClass;

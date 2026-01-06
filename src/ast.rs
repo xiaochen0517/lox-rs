@@ -105,6 +105,10 @@ generate_ast! {
         Block(block_visit) {
             statements: Vec<Box<dyn Stmt>>,
         },
+        Class(class_visit) {
+            name: Token,
+            methods: Vec<Box<dyn Stmt>>,
+        },
         Expression(expression_visit) {
             expression: Box<dyn Expr>,
         },
