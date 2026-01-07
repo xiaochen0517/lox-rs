@@ -23,12 +23,12 @@ macro_rules! generate_ast {
 
                 pub trait [<$ast_name Visitor>] {
                     $(
-                        fn $visitor_fn(&mut self, [<$ast_name:lower>]: &$struct_name) -> Result<Option<LoxType>, LoxReturn>;
+                        fn $visitor_fn(&mut self, [<$ast_name:lower>]: &$struct_name) -> Result<OptionLoxType, LoxReturn>;
                     )*
                 }
 
                 pub trait $ast_name:Debug + Send + Sync /*+ SimpleHash*/ {
-                    fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Result<Option<LoxType>, LoxReturn>;
+                    fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Result<OptionLoxType, LoxReturn>;
                     fn get_type(&self) -> [<$ast_name Type>];
                     fn as_any(&self) -> &dyn std::any::Any;
                     fn box_clone(&self) -> Box<dyn $ast_name>;
@@ -55,7 +55,7 @@ macro_rules! generate_ast {
 
                     impl $ast_name for $struct_name {
 
-                        fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Result<Option<LoxType>, LoxReturn> {
+                        fn accept(&self, visitor: &mut dyn [<$ast_name Visitor>]) -> Result<OptionLoxType, LoxReturn> {
                             visitor.$visitor_fn(self)
                         }
 

@@ -2,10 +2,10 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Assign, Binary, Block, Call, Class, Expr, Expression, Function, Grouping, If, Literal, Logical,
-    Print, Return, Stmt, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Class, Expr, Expression, Get, Grouping, If, Literal,
+    Logical, Print, Return, Set, Stmt, Unary, Var, Variable, While,
 };
-use crate::parser::error::{ParseError, create_parse_error};
+use crate::parser::error::{create_parse_error, ParseError};
 use crate::scanner::{LoxType, Token, TokenType};
 
 #[derive(Debug)]
@@ -121,6 +121,12 @@ impl Parser {
             if let Some(var_expr) = expr.as_any().downcast_ref::<Variable>() {
                 let name = var_expr.name.clone();
                 return Ok(Box::new(Assign::new(name, value)));
+            } else if let Some(get_expr) = expr.as_any().downcast_ref::<Get>() {
+                return Ok(Box::new(Set::new(
+                    get_expr.object.clone(),
+                    get_expr.name.clone(),
+                    value,
+                )));
             }
 
             let err_message = "Invalid assignment target.";
@@ -346,6 +352,9 @@ impl Parser {
         loop {
             if self.match_types(vec![TokenType::LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_types(vec![TokenType::Dot]) {
+                let name = self.consume(TokenType::Identifier, "Expect property name.")?;
+                expr = Box::new(Get::new(expr, name));
             } else {
                 break;
             }

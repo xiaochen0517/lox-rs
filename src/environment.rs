@@ -1,12 +1,13 @@
-use crate::scanner::{LoxType, Token};
-use crate::{log_error, log_info};
+use crate::log_info;
+use crate::scanner::Token;
+use crate::scanner::token::OptionLoxType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct Environment {
     enclosing: Option<Arc<Mutex<Environment>>>,
-    values: HashMap<String, Option<LoxType>>,
+    values: HashMap<String, OptionLoxType>,
 }
 
 impl Environment {
@@ -26,7 +27,7 @@ impl Environment {
         }
     }
 
-    pub fn new_with_values(values: HashMap<String, Option<LoxType>>) -> Self {
+    pub fn new_with_values(values: HashMap<String, OptionLoxType>) -> Self {
         log_info!("创建环境（携带默认值）: {:?}", values);
         Environment {
             enclosing: None,
@@ -34,14 +35,14 @@ impl Environment {
         }
     }
 
-    pub fn define(&mut self, name: String, value: Option<LoxType>) {
+    pub fn define(&mut self, name: String, value: OptionLoxType) {
         log_info!("定义变量: {}", name);
         self.values.insert(name, value);
     }
 
-    pub fn get(&self, name: &str) -> Option<LoxType> {
-        log_info!("获取变量 {}", name);
+    pub fn get(&self, name: &str) -> OptionLoxType {
         if let Some(value) = self.values.get(name) {
+            log_info!("获取变量 {}", name);
             return value.clone();
         }
         if let Some(enclosing) = &self.enclosing {
@@ -50,15 +51,15 @@ impl Environment {
         panic!("Undefined variable '{}'.", name);
     }
 
-    pub fn get_at(&self, distance: usize, name: &str) -> Option<LoxType> {
+    pub fn get_at(&self, distance: usize, name: &str) -> OptionLoxType {
         log_info!("获取变量 {} 在距离 {} 的环境中", name, distance);
         self.ancestor(distance)
             .lock()
             .unwrap()
             .values
             .get(name)
-            .cloned()
-            .unwrap_or(None)
+            .unwrap_or(&OptionLoxType::new_none())
+            .clone()
     }
 
     fn ancestor(&self, distance: usize) -> Arc<Mutex<Environment>> {
@@ -75,7 +76,7 @@ impl Environment {
         environment
     }
 
-    pub fn assign(&mut self, name: String, value: Option<LoxType>) -> Result<(), String> {
+    pub fn assign(&mut self, name: String, value: OptionLoxType) -> Result<(), String> {
         log_info!("分配变量 {} 值为 {:?}", name, value);
         if self.values.contains_key(&name) {
             self.values.insert(name.clone(), value);
@@ -92,7 +93,7 @@ impl Environment {
         &mut self,
         distance: usize,
         name: &Token,
-        value: Option<LoxType>,
+        value: OptionLoxType,
     ) -> Result<(), String> {
         log_info!(
             "在距离 {} 的环境中分配变量 {} 值为 {:?}",

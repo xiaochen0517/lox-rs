@@ -1,62 +1,12 @@
-use std::hash::Hasher;
 pub mod interpreter;
 mod macros;
 pub mod resolver;
 
+use crate::generate_ast;
+use crate::scanner::token::{LoxReturn, OptionLoxType, Token};
+use crate::scanner::LoxType;
 use paste::paste;
 use std::fmt::Debug;
-use std::hash::DefaultHasher;
-use std::hash::Hash;
-
-use crate::generate_ast;
-use crate::scanner::LoxType;
-use crate::scanner::token::{LoxReturn, Token};
-
-/*pub trait SimpleHash {
-    fn get_hash(&self) -> String;
-}
-
-impl SimpleHash for String {
-    fn get_hash(&self) -> String {
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        format!("{}", hasher.finish())
-    }
-}
-
-impl<T: SimpleHash> SimpleHash for Box<T> {
-    fn get_hash(&self) -> String {
-        (**self).get_hash()
-    }
-}
-
-impl<T: SimpleHash> SimpleHash for Option<T> {
-    fn get_hash(&self) -> String {
-        match self {
-            Some(value) => value.get_hash(),
-            None => "None".to_string(),
-        }
-    }
-}
-
-impl<T: SimpleHash> SimpleHash for Option<Box<T>> {
-    fn get_hash(&self) -> String {
-        match self {
-            Some(value) => value.get_hash(),
-            None => "None".to_string(),
-        }
-    }
-}
-
-impl<T: SimpleHash> SimpleHash for Vec<T> {
-    fn get_hash(&self) -> String {
-        let mut hash_str = String::new();
-        for item in self {
-            hash_str += &item.get_hash();
-        }
-        hash_str
-    }
-}*/
 
 generate_ast! {
     Expr {
@@ -91,7 +41,16 @@ generate_ast! {
             callee: Box<dyn Expr>,
             paren: Token,
             arguments: Vec<Box<dyn Expr>>,
-        }
+        },
+        Get(get_visit) {
+            object: Box<dyn Expr>,
+            name: Token,
+        },
+        Set(set_visit) {
+            object: Box<dyn Expr>,
+            name: Token,
+            value: Box<dyn Expr>,
+        },
     },
     Stmt {
         Print(print_visit) {
@@ -136,46 +95,54 @@ generate_ast! {
 pub struct PrintExprVisitor;
 
 impl ExprVisitor for PrintExprVisitor {
-    fn assign_visit(&mut self, _expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
+    fn assign_visit(&mut self, _expr: &Assign) -> Result<OptionLoxType, LoxReturn> {
         todo!()
     }
 
-    fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
+    fn binary_visit(&mut self, expr: &Binary) -> Result<OptionLoxType, LoxReturn> {
         print!("([binary] ");
         let _ = expr.left.accept(self);
         print!(" {} ", expr.operator.lexeme);
         let _ = expr.right.accept(self);
         print!(")");
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn grouping_visit(&mut self, expr: &Grouping) -> Result<Option<LoxType>, LoxReturn> {
+    fn grouping_visit(&mut self, expr: &Grouping) -> Result<OptionLoxType, LoxReturn> {
         print!("([group] ");
         let _ = expr.expression.accept(self);
         print!(")");
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn literal_visit(&mut self, _expr: &Literal) -> Result<Option<LoxType>, LoxReturn> {
-        Ok(None)
+    fn literal_visit(&mut self, _expr: &Literal) -> Result<OptionLoxType, LoxReturn> {
+        Ok(OptionLoxType::new_none())
     }
 
-    fn logical_visit(&mut self, _expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
+    fn logical_visit(&mut self, _expr: &Logical) -> Result<OptionLoxType, LoxReturn> {
         todo!()
     }
 
-    fn unary_visit(&mut self, expr: &Unary) -> Result<Option<LoxType>, LoxReturn> {
+    fn unary_visit(&mut self, expr: &Unary) -> Result<OptionLoxType, LoxReturn> {
         print!("([unary] {} ", expr.operator.lexeme);
         let _ = expr.right.accept(self);
         print!(")");
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn variable_visit(&mut self, _expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
+    fn variable_visit(&mut self, _expr: &Variable) -> Result<OptionLoxType, LoxReturn> {
         todo!()
     }
 
-    fn call_visit(&mut self, _expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
+    fn call_visit(&mut self, _expr: &Call) -> Result<OptionLoxType, LoxReturn> {
+        todo!()
+    }
+
+    fn get_visit(&mut self, _expr: &Get) -> Result<OptionLoxType, LoxReturn> {
+        todo!()
+    }
+
+    fn set_visit(&mut self, _expr: &Set) -> Result<OptionLoxType, LoxReturn> {
         todo!()
     }
 }

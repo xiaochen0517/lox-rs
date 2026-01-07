@@ -1,9 +1,9 @@
 use crate::ast::interpreter::Interpreter;
-use crate::class::LoxClass;
+use crate::class::{LoxClass, LoxInstance};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
@@ -58,11 +58,8 @@ pub enum TokenType {
 }
 
 pub trait Callable: Debug + Send + Sync {
-    fn call(
-        &mut self,
-        interpreter: &mut Interpreter,
-        arguments: &[Option<LoxType>],
-    ) -> Option<LoxType>;
+    fn call(&mut self, interpreter: &mut Interpreter, arguments: &[OptionLoxType])
+    -> OptionLoxType;
 
     fn arity(&self) -> usize;
 
@@ -89,16 +86,16 @@ impl PartialEq for dyn Callable {
 }
 
 pub struct LoxReturn {
-    pub value: Option<LoxType>,
+    pub value: OptionLoxType,
 }
 
 impl LoxReturn {
-    pub fn new(value: Option<LoxType>) -> Self {
+    pub fn new(value: OptionLoxType) -> Self {
         LoxReturn { value }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum LoxType {
     #[allow(clippy::box_collection)]
     Str(Box<String>),
@@ -106,6 +103,7 @@ pub enum LoxType {
     Bool(Box<bool>),
     Function(Box<dyn Callable>),
     Class(Box<LoxClass>),
+    Instance(Box<LoxInstance>),
 }
 
 impl LoxType {
@@ -128,7 +126,48 @@ impl LoxType {
     pub fn new_class(class: Box<LoxClass>) -> Self {
         LoxType::Class(class)
     }
+
+    pub fn new_instance(instance: Box<LoxInstance>) -> Self {
+        LoxType::Instance(instance)
+    }
 }
+
+#[derive(Debug)]
+pub struct OptionLoxType {
+    value: Arc<Mutex<Option<LoxType>>>,
+}
+
+impl OptionLoxType {
+    pub fn new(value: Option<LoxType>) -> Self {
+        OptionLoxType {
+            value: Arc::new(Mutex::new(value)),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        OptionLoxType {
+            value: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn get(&self) -> MutexGuard<'_, Option<LoxType>> {
+        self.value.lock().unwrap()
+    }
+
+    pub fn set(&self, value: Option<LoxType>) {
+        let mut guard = self.value.lock().unwrap();
+        *guard = value;
+    }
+}
+
+impl Clone for OptionLoxType {
+    fn clone(&self) -> Self {
+        OptionLoxType {
+            value: Arc::clone(&self.value),
+        }
+    }
+}
+
 /*
 impl SimpleHash for LoxType {
     fn get_hash(&self) -> String {
@@ -141,7 +180,7 @@ impl SimpleHash for LoxType {
     }
 }*/
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,

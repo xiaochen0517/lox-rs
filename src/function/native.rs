@@ -1,6 +1,6 @@
 use crate::ast::interpreter::Interpreter;
 use crate::scanner::LoxType;
-use crate::scanner::token::Callable;
+use crate::scanner::token::{Callable, OptionLoxType};
 use std::any::Any;
 use std::time::SystemTime;
 
@@ -17,13 +17,13 @@ impl Callable for ClockNativeFunction {
     fn call(
         &mut self,
         _interpreter: &mut Interpreter,
-        _arguments: &[Option<LoxType>],
-    ) -> Option<LoxType> {
+        _arguments: &[OptionLoxType],
+    ) -> OptionLoxType {
         let current_timestamp = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs_f64();
-        Some(LoxType::new_num(current_timestamp))
+        OptionLoxType::new(Some(LoxType::new_num(current_timestamp)))
     }
 
     fn arity(&self) -> usize {

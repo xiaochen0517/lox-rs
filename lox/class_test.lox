@@ -4,4 +4,13 @@ class TestClass {
     }
 }
 
-print TestClass;
+// print TestClass;
+
+var test = TestClass();
+
+// print test;
+
+// test.printHello();
+
+test.name = "TestClassName";
+print test.name;

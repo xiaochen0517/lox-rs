@@ -1,18 +1,19 @@
 use crate::ast::interpreter::Interpreter;
 use crate::ast::{
-    Assign, Binary, Block, Call, Class, Expr, ExprVisitor, Expression, Function, Grouping, If,
-    Literal, Logical, Print, Return, Stmt, StmtVisitor, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Class, Expr, ExprVisitor, Expression, Function, Get, Grouping, If,
+    Literal, Logical, Print, Return, Set, Stmt, StmtVisitor, Unary, Var, Variable, While,
 };
+use crate::log_info;
 use crate::prompt::Prompt;
-use crate::scanner::token::LoxReturn;
-use crate::scanner::{LoxType, Token};
-use crate::{Lox, log_info};
+use crate::scanner::Token;
+use crate::scanner::token::{LoxReturn, OptionLoxType};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 pub struct Resolver {
@@ -35,17 +36,17 @@ impl Resolver {
 
     pub fn resolve_stmts(&mut self, statements: &[Box<dyn Stmt>]) -> Result<(), LoxReturn> {
         for statement in statements {
-            self.resolve_stmt(statement)?;
+            self.resolve_stmt(statement.as_ref())?;
         }
         Ok(())
     }
 
-    fn resolve_stmt(&mut self, stmt: &Box<dyn Stmt>) -> Result<(), LoxReturn> {
+    fn resolve_stmt(&mut self, stmt: &dyn Stmt) -> Result<(), LoxReturn> {
         stmt.accept(self)?;
         Ok(())
     }
 
-    fn resolve_expr(&mut self, expr: &Box<dyn Expr>) -> Result<(), LoxReturn> {
+    fn resolve_expr(&mut self, expr: &dyn Expr) -> Result<(), LoxReturn> {
         expr.accept(self)?;
         Ok(())
     }
@@ -112,39 +113,39 @@ impl Resolver {
 }
 
 impl ExprVisitor for Resolver {
-    fn assign_visit(&mut self, expr: &Assign) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.value)?;
+    fn assign_visit(&mut self, expr: &Assign) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.value.as_ref())?;
         self.resolve_local(expr, &expr.name);
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn binary_visit(&mut self, expr: &Binary) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.left)?;
-        self.resolve_expr(&expr.right)?;
-        Ok(None)
+    fn binary_visit(&mut self, expr: &Binary) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.left.as_ref())?;
+        self.resolve_expr(expr.right.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn grouping_visit(&mut self, expr: &Grouping) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.expression)?;
-        Ok(None)
+    fn grouping_visit(&mut self, expr: &Grouping) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.expression.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn literal_visit(&mut self, _expr: &Literal) -> Result<Option<LoxType>, LoxReturn> {
-        Ok(None)
+    fn literal_visit(&mut self, _expr: &Literal) -> Result<OptionLoxType, LoxReturn> {
+        Ok(OptionLoxType::new_none())
     }
 
-    fn logical_visit(&mut self, expr: &Logical) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.left)?;
-        self.resolve_expr(&expr.right)?;
-        Ok(None)
+    fn logical_visit(&mut self, expr: &Logical) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.left.as_ref())?;
+        self.resolve_expr(expr.right.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn unary_visit(&mut self, expr: &Unary) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.right)?;
-        Ok(None)
+    fn unary_visit(&mut self, expr: &Unary) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.right.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn variable_visit(&mut self, expr: &Variable) -> Result<Option<LoxType>, LoxReturn> {
+    fn variable_visit(&mut self, expr: &Variable) -> Result<OptionLoxType, LoxReturn> {
         if !self.scopes.is_empty()
             && self.scopes.last().unwrap().get(expr.name.lexeme.as_str()) == Some(&false)
         {
@@ -155,80 +156,99 @@ impl ExprVisitor for Resolver {
         }
 
         self.resolve_local(expr, &expr.name);
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn call_visit(&mut self, expr: &Call) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&expr.callee)?;
+    fn call_visit(&mut self, expr: &Call) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.callee.as_ref())?;
         for argument in &expr.arguments {
-            self.resolve_expr(argument)?;
+            self.resolve_expr(argument.as_ref())?;
         }
-        Ok(None)
+        Ok(OptionLoxType::new_none())
+    }
+
+    fn get_visit(&mut self, expr: &Get) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.object.as_ref())?;
+        Ok(OptionLoxType::new_none())
+    }
+
+    fn set_visit(&mut self, expr: &Set) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(expr.value.as_ref())?;
+        self.resolve_expr(expr.object.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 }
 
 impl StmtVisitor for Resolver {
-    fn print_visit(&mut self, stmt: &Print) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&stmt.expression)?;
-        Ok(None)
+    fn print_visit(&mut self, stmt: &Print) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(stmt.expression.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn if_visit(&mut self, stmt: &If) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&stmt.condition)?;
-        self.resolve_stmt(&stmt.then_branch)?;
+    fn if_visit(&mut self, stmt: &If) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(stmt.condition.as_ref())?;
+        self.resolve_stmt(stmt.then_branch.as_ref())?;
         if let Some(else_branch) = &stmt.else_branch {
-            self.resolve_stmt(else_branch)?;
+            self.resolve_stmt(else_branch.as_ref())?;
         }
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn block_visit(&mut self, stmt: &Block) -> Result<Option<LoxType>, LoxReturn> {
+    fn block_visit(&mut self, stmt: &Block) -> Result<OptionLoxType, LoxReturn> {
         self.begin_scope();
         self.resolve_stmts(&stmt.statements)?;
         self.end_scope();
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn class_visit(&mut self, stmt: &Class) -> Result<Option<LoxType>, LoxReturn> {
+    fn class_visit(&mut self, stmt: &Class) -> Result<OptionLoxType, LoxReturn> {
         self.declare(&stmt.name);
         self.define(&stmt.name);
-        Ok(None)
+        for method_stmt in &stmt.methods {
+            if let Some(method) = method_stmt.as_any().downcast_ref::<Function>() {
+                let declaration = FunctionType::Method;
+                self.resolve_function(method, declaration)?;
+            } else {
+                panic!("Class method is not a function");
+            }
+        }
+        Ok(OptionLoxType::new_none())
     }
 
-    fn expression_visit(&mut self, stmt: &Expression) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&stmt.expression)?;
-        Ok(None)
+    fn expression_visit(&mut self, stmt: &Expression) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(stmt.expression.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn var_visit(&mut self, stmt: &Var) -> Result<Option<LoxType>, LoxReturn> {
+    fn var_visit(&mut self, stmt: &Var) -> Result<OptionLoxType, LoxReturn> {
         self.declare(&stmt.name);
-        self.resolve_expr(&stmt.initializer)?;
+        self.resolve_expr(stmt.initializer.as_ref())?;
         self.define(&stmt.name);
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn while_visit(&mut self, stmt: &While) -> Result<Option<LoxType>, LoxReturn> {
-        self.resolve_expr(&stmt.condition)?;
-        self.resolve_stmt(&stmt.body)?;
-        Ok(None)
+    fn while_visit(&mut self, stmt: &While) -> Result<OptionLoxType, LoxReturn> {
+        self.resolve_expr(stmt.condition.as_ref())?;
+        self.resolve_stmt(stmt.body.as_ref())?;
+        Ok(OptionLoxType::new_none())
     }
 
-    fn function_visit(&mut self, stmt: &Function) -> Result<Option<LoxType>, LoxReturn> {
+    fn function_visit(&mut self, stmt: &Function) -> Result<OptionLoxType, LoxReturn> {
         self.declare(&stmt.name);
         self.define(&stmt.name);
 
         self.resolve_function(stmt, FunctionType::Function)?;
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 
-    fn return_visit(&mut self, stmt: &Return) -> Result<Option<LoxType>, LoxReturn> {
+    fn return_visit(&mut self, stmt: &Return) -> Result<OptionLoxType, LoxReturn> {
         if self.current_function == FunctionType::None {
             Prompt::error(&stmt.keyword, "Cannot return from top-level code.");
         }
         if let Some(value) = &stmt.value {
             log_info!("解析 return 语句的值: {:?}", value);
-            self.resolve_expr(value)?;
+            self.resolve_expr(value.as_ref())?;
         }
-        Ok(None)
+        Ok(OptionLoxType::new_none())
     }
 }
