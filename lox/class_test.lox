@@ -14,3 +14,17 @@ var test = TestClass();
 
 test.name = "TestClassName";
 print test.name;
+
+class Foo {
+    init(a, b) {
+        this.a = a;
+        this.b = b;
+    }
+
+    display() {
+        print "a: " + this.a + ", b: " + this.b;
+    }
+}
+
+var fooInstance = Foo(10, 20);
+fooInstance.display();

@@ -3,8 +3,8 @@ mod macros;
 pub mod resolver;
 
 use crate::generate_ast;
-use crate::scanner::token::{LoxReturn, OptionLoxType, Token};
 use crate::scanner::LoxType;
+use crate::scanner::token::{LoxReturn, OptionLoxType, Token};
 use paste::paste;
 use std::fmt::Debug;
 
@@ -50,6 +50,9 @@ generate_ast! {
             object: Box<dyn Expr>,
             name: Token,
             value: Box<dyn Expr>,
+        },
+        This(this_visit) {
+            keyword: Token,
         },
     },
     Stmt {
@@ -105,18 +108,18 @@ impl ExprVisitor for PrintExprVisitor {
         print!(" {} ", expr.operator.lexeme);
         let _ = expr.right.accept(self);
         print!(")");
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn grouping_visit(&mut self, expr: &Grouping) -> Result<OptionLoxType, LoxReturn> {
         print!("([group] ");
         let _ = expr.expression.accept(self);
         print!(")");
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn literal_visit(&mut self, _expr: &Literal) -> Result<OptionLoxType, LoxReturn> {
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn logical_visit(&mut self, _expr: &Logical) -> Result<OptionLoxType, LoxReturn> {
@@ -127,7 +130,7 @@ impl ExprVisitor for PrintExprVisitor {
         print!("([unary] {} ", expr.operator.lexeme);
         let _ = expr.right.accept(self);
         print!(")");
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn variable_visit(&mut self, _expr: &Variable) -> Result<OptionLoxType, LoxReturn> {
@@ -143,6 +146,10 @@ impl ExprVisitor for PrintExprVisitor {
     }
 
     fn set_visit(&mut self, _expr: &Set) -> Result<OptionLoxType, LoxReturn> {
+        todo!()
+    }
+
+    fn this_visit(&mut self, _expr: &This) -> Result<OptionLoxType, LoxReturn> {
         todo!()
     }
 }

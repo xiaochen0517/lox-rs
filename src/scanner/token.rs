@@ -144,7 +144,7 @@ impl OptionLoxType {
         }
     }
 
-    pub fn new_none() -> Self {
+    pub fn none() -> Self {
         OptionLoxType {
             value: Arc::new(Mutex::new(None)),
         }

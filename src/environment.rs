@@ -4,10 +4,10 @@ use crate::scanner::token::OptionLoxType;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Environment {
     enclosing: Option<Arc<Mutex<Environment>>>,
-    values: HashMap<String, OptionLoxType>,
+    values: Arc<Mutex<HashMap<String, OptionLoxType>>>,
 }
 
 impl Environment {
@@ -15,15 +15,15 @@ impl Environment {
         log_info!("创建新环境");
         Environment {
             enclosing: None,
-            values: HashMap::new(),
+            values: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub fn new_with_enclosing(enclosing: Arc<Mutex<Environment>>) -> Self {
         log_info!("创建新环境（携带封闭环境）");
         Environment {
-            enclosing: enclosing.into(),
-            values: HashMap::new(),
+            enclosing: Some(enclosing),
+            values: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -31,17 +31,17 @@ impl Environment {
         log_info!("创建环境（携带默认值）: {:?}", values);
         Environment {
             enclosing: None,
-            values,
+            values: Arc::new(Mutex::new(values)),
         }
     }
 
     pub fn define(&mut self, name: String, value: OptionLoxType) {
         log_info!("定义变量: {}", name);
-        self.values.insert(name, value);
+        self.values.lock().unwrap().insert(name, value);
     }
 
     pub fn get(&self, name: &str) -> OptionLoxType {
-        if let Some(value) = self.values.get(name) {
+        if let Some(value) = self.values.lock().unwrap().get(name) {
             log_info!("获取变量 {}", name);
             return value.clone();
         }
@@ -57,8 +57,10 @@ impl Environment {
             .lock()
             .unwrap()
             .values
+            .lock()
+            .unwrap()
             .get(name)
-            .unwrap_or(&OptionLoxType::new_none())
+            .unwrap_or(&OptionLoxType::none())
             .clone()
     }
 
@@ -78,8 +80,8 @@ impl Environment {
 
     pub fn assign(&mut self, name: String, value: OptionLoxType) -> Result<(), String> {
         log_info!("分配变量 {} 值为 {:?}", name, value);
-        if self.values.contains_key(&name) {
-            self.values.insert(name.clone(), value);
+        if self.values.lock().unwrap().contains_key(&name) {
+            self.values.lock().unwrap().insert(name.clone(), value);
             return Ok(());
         }
         if let Some(enclosing) = &self.enclosing {
@@ -105,7 +107,23 @@ impl Environment {
             .lock()
             .unwrap()
             .values
+            .lock()
+            .unwrap()
             .insert(name.lexeme.clone(), value);
         Ok(())
+    }
+}
+
+impl Clone for Environment {
+    fn clone(&self) -> Self {
+        let enclosing = if let Some(enclosing) = &self.enclosing {
+            Some(Arc::clone(enclosing))
+        } else {
+            None
+        };
+        Environment {
+            enclosing,
+            values: Arc::clone(&self.values),
+        }
     }
 }

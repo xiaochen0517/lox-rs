@@ -1,0 +1,21 @@
+class Foo {
+    init() {
+        this.age = 100;
+        print this;
+    }
+
+    display() {
+        print "name: " + this.name;
+    }
+
+    printAge() {
+        print "age: " + this.age;
+    }
+}
+
+var foo = Foo();
+foo.name = "MyFooInstance";
+
+foo.display(); // Should print: name: MyFooInstance
+
+foo.printAge(); // Should print: age: 100

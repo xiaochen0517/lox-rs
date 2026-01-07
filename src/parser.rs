@@ -2,10 +2,10 @@ use std::fmt::Debug;
 mod error;
 
 use crate::ast::{
-    Assign, Binary, Block, Call, Class, Expr, Expression, Get, Grouping, If, Literal,
-    Logical, Print, Return, Set, Stmt, Unary, Var, Variable, While,
+    Assign, Binary, Block, Call, Class, Expr, Expression, Get, Grouping, If, Literal, Logical,
+    Print, Return, Set, Stmt, This, Unary, Var, Variable, While,
 };
-use crate::parser::error::{create_parse_error, ParseError};
+use crate::parser::error::{ParseError, create_parse_error};
 use crate::scanner::{LoxType, Token, TokenType};
 
 #[derive(Debug)]
@@ -390,6 +390,8 @@ impl Parser {
             return Ok(Box::new(Literal::new(Some(
                 self.previous().literal.clone().unwrap(),
             ))));
+        } else if self.match_types(vec![TokenType::This]) {
+            return Ok(Box::new(This::new(self.previous())));
         } else if self.match_types(vec![TokenType::Identifier]) {
             return Ok(Box::new(Variable::new(self.previous())));
         } else if self.match_types(vec![TokenType::LeftParen]) {

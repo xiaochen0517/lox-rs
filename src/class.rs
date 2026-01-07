@@ -4,6 +4,7 @@ use crate::scanner::token::{Callable, OptionLoxType};
 use crate::scanner::{LoxType, Token};
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct LoxClass {
@@ -34,14 +35,25 @@ impl LoxClass {
 impl Callable for LoxClass {
     fn call(
         &mut self,
-        _interpreter: &mut Interpreter,
-        _arguments: &[OptionLoxType],
+        interpreter: &mut Interpreter,
+        arguments: &[OptionLoxType],
     ) -> OptionLoxType {
         let instance = LoxInstance::new(self.box_clone());
+        let initializer = self.find_method("init");
+        if let Some(initializer) = initializer {
+            let lox_type = initializer.bind(&instance);
+            if let Some(LoxType::Function(mut func)) = lox_type.get().clone() {
+                func.call(interpreter, arguments);
+            }
+        }
         OptionLoxType::new(Some(LoxType::new_instance(Box::new(instance))))
     }
 
     fn arity(&self) -> usize {
+        let initializer = self.find_method("init");
+        if let Some(initializer) = initializer {
+            return initializer.arity();
+        }
         0
     }
 
@@ -58,33 +70,45 @@ impl Callable for LoxClass {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LoxInstance {
     pub class: Box<LoxClass>,
-    pub fields: HashMap<String, OptionLoxType>,
+    pub fields: Arc<Mutex<HashMap<String, OptionLoxType>>>,
 }
 
 impl LoxInstance {
     pub fn new(class: Box<LoxClass>) -> Self {
         LoxInstance {
             class,
-            fields: HashMap::new(),
+            fields: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub fn get(&self, name: &Token) -> OptionLoxType {
         let lexeme = name.lexeme.as_str();
-        if self.fields.contains_key(lexeme) {
-            return self.fields.get(lexeme).cloned().unwrap();
+        if self.fields.lock().unwrap().contains_key(lexeme) {
+            return self.fields.lock().unwrap().get(lexeme).cloned().unwrap();
         }
         let method = self.class.find_method(lexeme);
         if let Some(method) = method {
-            return OptionLoxType::new(Some(LoxType::new_function(method)));
+            return method.bind(self);
         }
         panic!("Undefined property '{}'.", name.lexeme);
     }
 
     pub fn set(&mut self, name: &Token, value: &OptionLoxType) {
-        self.fields.insert(name.lexeme.clone(), value.clone());
+        self.fields
+            .lock()
+            .unwrap()
+            .insert(name.lexeme.clone(), value.clone());
+    }
+}
+
+impl Clone for LoxInstance {
+    fn clone(&self) -> Self {
+        LoxInstance {
+            class: self.class.box_clone(),
+            fields: Arc::clone(&self.fields),
+        }
     }
 }

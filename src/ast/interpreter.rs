@@ -1,5 +1,5 @@
 use crate::ast::{
-    Assign, Block, Call, Class, Function, Get, If, Logical, Return, Set, Var, Variable, While,
+    Assign, Block, Call, Class, Function, Get, If, Logical, Return, Set, This, Var, Variable, While,
 };
 use crate::class::LoxClass;
 use crate::environment::Environment;
@@ -72,7 +72,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn lookup_variable(&mut self, name: &Token, expr: &Variable) -> OptionLoxType {
+    fn lookup_variable(&mut self, name: &Token, expr: &dyn Expr) -> OptionLoxType {
         log_info!("查询变量 {}, Hash {}", name.lexeme, format!("{:?}", expr));
         let distance = self.locals.get(&format!("{:?}", expr));
         log_info!("距离信息: {:?}", distance);
@@ -277,7 +277,7 @@ impl ExprVisitor for Interpreter {
             TokenType::EqualEqual => Ok(OptionLoxType::new(Some(LoxType::new_bool(
                 self.is_equal(left, right),
             )))),
-            _ => Ok(OptionLoxType::new_none()),
+            _ => Ok(OptionLoxType::none()),
         }
     }
 
@@ -317,7 +317,7 @@ impl ExprVisitor for Interpreter {
                     panic!("Operand must be a number.");
                 }
             }
-            _ => Ok(OptionLoxType::new_none()),
+            _ => Ok(OptionLoxType::none()),
         }
     }
 
@@ -372,6 +372,10 @@ impl ExprVisitor for Interpreter {
             expr.name.lexeme
         );
     }
+
+    fn this_visit(&mut self, expr: &This) -> Result<OptionLoxType, LoxReturn> {
+        Ok(self.lookup_variable(&expr.keyword, expr))
+    }
 }
 
 impl StmtVisitor for Interpreter {
@@ -403,19 +407,19 @@ impl StmtVisitor for Interpreter {
                 print!("<nil>");
             }
         }
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn if_visit(&mut self, stmt: &If) -> Result<OptionLoxType, LoxReturn> {
         let condition_result = self.evaluate(stmt.condition.as_ref())?;
         if self.is_truthy(&condition_result) {
             let _ = self.execute(stmt.then_branch.as_ref());
-            return Ok(OptionLoxType::new_none());
+            return Ok(OptionLoxType::none());
         }
         if let Some(else_branch) = stmt.else_branch.as_ref() {
             let _ = self.execute(else_branch.as_ref());
         }
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn block_visit(&mut self, stmt: &Block) -> Result<OptionLoxType, LoxReturn> {
@@ -423,18 +427,22 @@ impl StmtVisitor for Interpreter {
             &stmt.statements,
             Environment::new_with_enclosing(Arc::clone(&self.environment)),
         );
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn class_visit(&mut self, stmt: &Class) -> Result<OptionLoxType, LoxReturn> {
         self.environment
             .lock()
             .unwrap()
-            .define(stmt.name.lexeme.clone(), OptionLoxType::new_none());
+            .define(stmt.name.lexeme.clone(), OptionLoxType::none());
         let mut methods = HashMap::new();
         for method in &stmt.methods {
             if let Some(func) = method.as_any().downcast_ref::<Function>() {
-                let function = LoxFunction::new(func.clone(), Some(Arc::clone(&self.environment)));
+                let function = LoxFunction::new(
+                    func.clone(),
+                    Some(Arc::clone(&self.environment)),
+                    func.name.lexeme.eq("init"),
+                );
                 methods.insert(func.name.lexeme.clone(), Box::new(function));
             } else {
                 panic!("Class method is not a function");
@@ -445,12 +453,12 @@ impl StmtVisitor for Interpreter {
             stmt.name.lexeme.clone(),
             OptionLoxType::new(Some(LoxType::new_class(Box::new(class)))),
         );
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn expression_visit(&mut self, stmt: &Expression) -> Result<OptionLoxType, LoxReturn> {
         let _ = self.evaluate(stmt.expression.as_ref());
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn var_visit(&mut self, stmt: &Var) -> Result<OptionLoxType, LoxReturn> {
@@ -459,7 +467,7 @@ impl StmtVisitor for Interpreter {
             .lock()
             .unwrap()
             .define(stmt.name.lexeme.clone(), value);
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn while_visit(&mut self, stmt: &While) -> Result<OptionLoxType, LoxReturn> {
@@ -468,20 +476,20 @@ impl StmtVisitor for Interpreter {
             let _ = self.execute(stmt.body.as_ref());
             condition_result = self.evaluate(stmt.condition.as_ref())?;
         }
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn function_visit(&mut self, stmt: &Function) -> Result<OptionLoxType, LoxReturn> {
-        let function = LoxFunction::new(stmt.clone(), Some(Arc::clone(&self.environment)));
+        let function = LoxFunction::new(stmt.clone(), Some(Arc::clone(&self.environment)), false);
         self.environment.lock().unwrap().define(
             stmt.name.lexeme.clone(),
             OptionLoxType::new(Some(LoxType::new_function(Box::new(function)))),
         );
-        Ok(OptionLoxType::new_none())
+        Ok(OptionLoxType::none())
     }
 
     fn return_visit(&mut self, stmt: &Return) -> Result<OptionLoxType, LoxReturn> {
-        let mut value = OptionLoxType::new_none();
+        let mut value = OptionLoxType::none();
         if let Some(return_value) = stmt.value.as_ref() {
             value = self.evaluate(return_value.as_ref())?;
         }
