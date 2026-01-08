@@ -5,4 +5,5 @@ class Foo {
 
 }
 
-Foo("Hello", 42);
+var foo = Foo("Hello", 42);
+foo.init("World", 100);

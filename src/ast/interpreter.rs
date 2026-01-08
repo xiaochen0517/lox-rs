@@ -53,10 +53,11 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, statements: &Vec<Box<dyn Stmt>>) {
+    pub fn interpret(&mut self, statements: &Vec<Box<dyn Stmt>>) -> Result<(), LoxReturn> {
         for statement in statements {
-            let _ = self.execute(statement.as_ref());
+            let _ = self.execute(statement.as_ref())?;
         }
+        Ok(())
     }
 
     fn execute(&mut self, stmt: &dyn Stmt) -> Result<OptionLoxType, LoxReturn> {
@@ -93,11 +94,10 @@ impl Interpreter {
     ) -> Result<(), LoxReturn> {
         let new_rc_environment = Arc::new(Mutex::new(environment));
         let original_env = mem::replace(&mut self.environment, new_rc_environment);
-        for statement in statements {
-            self.execute(statement.as_ref())?;
-        }
+        // 不可以提前返回，需要恢复环境，所以使用 let 绑定 result
+        let result = self.interpret(statements);
         self.environment = original_env;
-        Ok(())
+        result
     }
 
     fn evaluate(&mut self, expr: &dyn Expr) -> Result<OptionLoxType, LoxReturn> {
@@ -193,6 +193,13 @@ impl Interpreter {
                 LoxType::new_num(calculate(**left, **right)),
             ))),
             _ => panic!("Operand must be numbers"),
+        }
+    }
+
+    fn check_call_arguments_size(&self, arg_size: usize, call_size: usize) {
+        // 检查调用的参数数量是否匹配
+        if arg_size != call_size {
+            panic!("Expected {} arguments but got {}.", call_size, arg_size);
         }
     }
 }
@@ -333,16 +340,10 @@ impl ExprVisitor for Interpreter {
         }
         // 需要确保 callee 是一个函数
         if let Some(LoxType::Function(function)) = callee.get().as_mut() {
-            // 检查调用的参数数量是否匹配
-            if arguments.len() != function.arity() {
-                panic!(
-                    "Expected {} arguments but got {}.",
-                    function.arity(),
-                    arguments.len()
-                );
-            }
+            self.check_call_arguments_size(arguments.len(), function.arity());
             Ok(function.call(self, &arguments))
         } else if let Some(LoxType::Class(class)) = callee.get().as_mut() {
+            self.check_call_arguments_size(arguments.len(), class.arity());
             Ok(class.call(self, &arguments))
         } else {
             panic!("Can only call functions.");
