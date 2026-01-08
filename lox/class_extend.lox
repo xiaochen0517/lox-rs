@@ -1,0 +1,32 @@
+class Person {
+    say() {
+        print "Hello from Person!";
+    }
+}
+
+class John < Person {
+    init() {
+        print "John is initialized.";
+    }
+
+    greet() {
+        print "Hi, I'm John.";
+    }
+
+    say() {
+        print "Hello from John!";
+        super.say();
+    }
+}
+
+class JohnMouth < John {
+    speak() {
+        print "JohnMouth is speaking.";
+    }
+}
+
+var john = JohnMouth();
+john.greet(); // Should print: Hi, I'm John.
+john.say();   // Should print: Hello from Person!
+
+john.speak(); // Should print: JohnMouth is speaking.

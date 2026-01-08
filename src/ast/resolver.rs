@@ -1,7 +1,8 @@
 use crate::ast::interpreter::Interpreter;
 use crate::ast::{
     Assign, Binary, Block, Call, Class, Expr, ExprVisitor, Expression, Function, Get, Grouping, If,
-    Literal, Logical, Print, Return, Set, Stmt, StmtVisitor, This, Unary, Var, Variable, While,
+    Literal, Logical, Print, Return, Set, Stmt, StmtVisitor, Super, This, Unary, Var, Variable,
+    While,
 };
 use crate::log_info;
 use crate::prompt::Prompt;
@@ -21,6 +22,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 pub struct Resolver {
@@ -195,6 +197,19 @@ impl ExprVisitor for Resolver {
         self.resolve_local(expr, &expr.keyword);
         Ok(OptionLoxType::none())
     }
+
+    fn super_visit(&mut self, expr: &Super) -> Result<OptionLoxType, LoxReturn> {
+        if self.current_class == ClassType::None {
+            Prompt::error(&expr.keyword, "Cannot use 'super' outside of a class.");
+        } else if self.current_class != ClassType::Subclass {
+            Prompt::error(
+                &expr.keyword,
+                "Cannot use 'super' in a class with no superclass.",
+            );
+        }
+        self.resolve_local(expr, &expr.keyword);
+        Ok(OptionLoxType::none())
+    }
 }
 
 impl StmtVisitor for Resolver {
@@ -224,10 +239,27 @@ impl StmtVisitor for Resolver {
         self.current_class = ClassType::Class;
         self.declare(&stmt.name);
         self.define(&stmt.name);
+
+        if let Some(superclass) = &stmt.superclass {
+            if let Some(var_expr) = superclass.as_any().downcast_ref::<Variable>()
+                && var_expr.name.lexeme == stmt.name.lexeme
+            {
+                Prompt::error(&var_expr.name, "A class cannot inherit from itself.");
+            }
+            self.current_class = ClassType::Subclass;
+            self.resolve_expr(superclass.as_ref())?;
+
+            self.begin_scope();
+            self.scopes
+                .last_mut()
+                .expect("Class should have at least one scope")
+                .insert("super".to_string(), true);
+        }
+
         self.begin_scope();
         self.scopes
             .last_mut()
-            .unwrap()
+            .expect("Class should have at least one scope")
             .insert("this".to_string(), true);
         for method_stmt in &stmt.methods {
             if let Some(method) = method_stmt.as_any().downcast_ref::<Function>() {
@@ -241,6 +273,9 @@ impl StmtVisitor for Resolver {
             }
         }
         self.end_scope();
+        if stmt.superclass.is_some() {
+            self.end_scope();
+        }
         self.current_class = enclosing_class;
         Ok(OptionLoxType::none())
     }

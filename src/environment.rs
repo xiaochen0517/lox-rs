@@ -35,6 +35,14 @@ impl Environment {
         }
     }
 
+    pub fn get_enclosing(&self) -> Option<Arc<Mutex<Environment>>> {
+        if let Some(enclosing) = &self.enclosing {
+            log_info!("获取封闭环境");
+            return Some(Arc::clone(enclosing));
+        }
+        None
+    }
+
     pub fn define(&mut self, name: String, value: OptionLoxType) {
         log_info!("定义变量: {}", name);
         self.values.lock().unwrap().insert(name, value);

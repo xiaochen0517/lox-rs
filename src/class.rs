@@ -9,13 +9,19 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone)]
 pub struct LoxClass {
     pub name: String,
+    pub superclass: Option<Box<LoxClass>>,
     pub methods: HashMap<String, Box<LoxFunction>>,
 }
 
 impl LoxClass {
-    pub fn new(name: &str, methods: HashMap<String, Box<LoxFunction>>) -> Self {
+    pub fn new(
+        name: &str,
+        superclass: Option<Box<LoxClass>>,
+        methods: HashMap<String, Box<LoxFunction>>,
+    ) -> Self {
         LoxClass {
             name: name.to_string(),
+            superclass,
             methods,
         }
     }
@@ -27,6 +33,9 @@ impl LoxClass {
     pub fn find_method(&self, name: &str) -> Option<Box<LoxFunction>> {
         if let Some(method) = self.methods.get(name) {
             return Some(method.clone());
+        }
+        if let Some(superclass) = &self.superclass {
+            return superclass.find_method(name);
         }
         None
     }

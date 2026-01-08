@@ -54,6 +54,10 @@ generate_ast! {
         This(this_visit) {
             keyword: Token,
         },
+        Super(super_visit) {
+            keyword: Token,
+            method: Token,
+        },
     },
     Stmt {
         Print(print_visit) {
@@ -69,6 +73,7 @@ generate_ast! {
         },
         Class(class_visit) {
             name: Token,
+            superclass: Option<Box<dyn Expr>>,
             methods: Vec<Box<dyn Stmt>>,
         },
         Expression(expression_visit) {
@@ -90,7 +95,7 @@ generate_ast! {
         Return(return_visit) {
             keyword: Token,
             value: Option<Box<dyn Expr>>,
-        }
+        },
     },
 }
 
@@ -150,6 +155,10 @@ impl ExprVisitor for PrintExprVisitor {
     }
 
     fn this_visit(&mut self, _expr: &This) -> Result<OptionLoxType, LoxReturn> {
+        todo!()
+    }
+
+    fn super_visit(&mut self, expr: &Super) -> Result<OptionLoxType, LoxReturn> {
         todo!()
     }
 }

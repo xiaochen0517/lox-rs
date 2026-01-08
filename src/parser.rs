@@ -3,7 +3,7 @@ mod error;
 
 use crate::ast::{
     Assign, Binary, Block, Call, Class, Expr, Expression, Get, Grouping, If, Literal, Logical,
-    Print, Return, Set, Stmt, This, Unary, Var, Variable, While,
+    Print, Return, Set, Stmt, Super, This, Unary, Var, Variable, While,
 };
 use crate::parser::error::{ParseError, create_parse_error};
 use crate::scanner::{LoxType, Token, TokenType};
@@ -45,16 +45,21 @@ impl Parser {
 
     fn class_declaration(&mut self) -> Result<Box<dyn Stmt>, ParseError> {
         let name = self.consume(TokenType::Identifier, "Expect class name.")?;
-        self.consume(TokenType::LeftBrace, "Expect '{' after class name.")?;
+        let superclass: Option<Box<dyn Expr>> = if self.match_types(vec![TokenType::Less]) {
+            self.consume(TokenType::Identifier, "Expect superclass name.")?;
+            Some(Box::new(Variable::new(self.previous())))
+        } else {
+            None
+        };
 
+        self.consume(TokenType::LeftBrace, "Expect '{' after class name.")?;
         let mut methods = Vec::new();
         while !self.check(TokenType::RightBrace) && !self.is_at_end() {
             let method_result = self.function("method")?;
             methods.push(method_result);
         }
-
         self.consume(TokenType::RightBrace, "Expect '}' after class name.")?;
-        Ok(Box::new(Class::new(name, methods)))
+        Ok(Box::new(Class::new(name, superclass, methods)))
     }
 
     fn function(&mut self, kind: &str) -> Result<Box<dyn Stmt>, ParseError> {
@@ -390,6 +395,11 @@ impl Parser {
             return Ok(Box::new(Literal::new(Some(
                 self.previous().literal.clone().unwrap(),
             ))));
+        } else if self.match_types(vec![TokenType::Super]) {
+            let keyword = self.previous();
+            self.consume(TokenType::Dot, "Expect '.' after super.")?;
+            let method = self.consume(TokenType::Identifier, "Expect superclass method name.")?;
+            return Ok(Box::new(Super::new(keyword, method)));
         } else if self.match_types(vec![TokenType::This]) {
             return Ok(Box::new(This::new(self.previous())));
         } else if self.match_types(vec![TokenType::Identifier]) {

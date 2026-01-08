@@ -1,5 +1,6 @@
 use crate::ast::{
-    Assign, Block, Call, Class, Function, Get, If, Logical, Return, Set, This, Var, Variable, While,
+    Assign, Block, Call, Class, Function, Get, If, Logical, Return, Set, Super, This, Var,
+    Variable, While,
 };
 use crate::class::LoxClass;
 use crate::environment::Environment;
@@ -377,6 +378,31 @@ impl ExprVisitor for Interpreter {
     fn this_visit(&mut self, expr: &This) -> Result<OptionLoxType, LoxReturn> {
         Ok(self.lookup_variable(&expr.keyword, expr))
     }
+
+    fn super_visit(&mut self, expr: &Super) -> Result<OptionLoxType, LoxReturn> {
+        let distance = self
+            .locals
+            .get(&format!("{:?}", expr))
+            .expect("super must be resolved")
+            .depth;
+        let superclass = self.environment.lock().unwrap().get_at(distance, "super");
+        let object = self
+            .environment
+            .lock()
+            .unwrap()
+            .get_at(distance - 1, "this");
+        // 获取方法
+        if let Some(LoxType::Class(class)) = superclass.get().as_mut()
+            && let Some(LoxType::Instance(instance)) = object.get().as_mut()
+        {
+            let method = class
+                .find_method(expr.method.lexeme.as_str())
+                .expect("Cannot find superclass method");
+            Ok(method.bind(instance))
+        } else {
+            panic!("super must be called from a class instance");
+        }
+    }
 }
 
 impl StmtVisitor for Interpreter {
@@ -432,10 +458,30 @@ impl StmtVisitor for Interpreter {
     }
 
     fn class_visit(&mut self, stmt: &Class) -> Result<OptionLoxType, LoxReturn> {
+        // 获取父类
+        let superclass = if let Some(superclass_expr) = stmt.superclass.as_ref() {
+            let superclass_value = self.evaluate(superclass_expr.as_ref())?;
+            if let Some(LoxType::Class(superclass)) = superclass_value.get().as_ref() {
+                Some(superclass.clone())
+            } else {
+                panic!("Superclass must be a class.");
+            }
+        } else {
+            None
+        };
         self.environment
             .lock()
             .unwrap()
             .define(stmt.name.lexeme.clone(), OptionLoxType::none());
+        // 如果有父类，则创建一个新的环境来绑定 super 变量
+        if let Some(superclass) = superclass.as_ref() {
+            let mut enclosing = Environment::new_with_enclosing(Arc::clone(&self.environment));
+            enclosing.define(
+                "super".to_string(),
+                OptionLoxType::new(Some(LoxType::Class(superclass.clone()))),
+            );
+            self.environment = Arc::new(Mutex::new(enclosing));
+        }
         let mut methods = HashMap::new();
         for method in &stmt.methods {
             if let Some(func) = method.as_any().downcast_ref::<Function>() {
@@ -449,7 +495,12 @@ impl StmtVisitor for Interpreter {
                 panic!("Class method is not a function");
             };
         }
-        let class = LoxClass::new(stmt.name.lexeme.as_str(), methods);
+        let class = LoxClass::new(stmt.name.lexeme.as_str(), superclass, methods);
+        // 如果有父类，恢复之前的环境
+        if stmt.superclass.is_some() {
+            let enclosing = self.environment.lock().unwrap().get_enclosing();
+            self.environment = enclosing.expect("Cannot restore enclosing environment");
+        }
         let _ = self.environment.lock().unwrap().assign(
             stmt.name.lexeme.clone(),
             OptionLoxType::new(Some(LoxType::new_class(Box::new(class)))),
